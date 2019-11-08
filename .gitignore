@@ -66,4 +66,6 @@ package-lock.json
 # ignore dist
 dist/
 test/
-data.db
+
+# ignore database file
+app.db

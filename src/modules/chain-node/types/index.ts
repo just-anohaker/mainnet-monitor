@@ -5,6 +5,10 @@ export enum NodeType {
     UNDEFINED = 'undefined'
 }
 
+export enum NodeStatusType {
+
+}
+
 export function nodetypeToNumber(nodetype: NodeType): number {
     switch (nodetype) {
         case NodeType.GPU: return 0;
@@ -25,10 +29,18 @@ export function numberToNodeType(type: number): NodeType {
     }
 }
 
+export interface NodeHeaderRequest {
+    ip: string;
+    port: number;
+    type?: number;
+    name?: string;
+}
+
 export interface NodeHeader {
     ip: string;
     port: number;
     type?: NodeType;
+    name?: string;
 }
 
 export interface DelegateHeader {
@@ -42,6 +54,7 @@ export interface DelegateHeaderRelatived extends DelegateHeader {
 
 export interface NodeInfo extends NodeHeader {
     id: string;
+    status: number;
 
     lastestHeight?: number;
     generatorPublicKey?: string;

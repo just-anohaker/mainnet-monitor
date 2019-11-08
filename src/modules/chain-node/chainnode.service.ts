@@ -7,7 +7,7 @@ import uuid from 'uuid';
 
 import { ChainNode } from './models/node.entity';
 import { Delegate } from './models/delegate.entity';
-import { NodeHeader, NodeInfo, nodetypeToNumber, DelegateInfo, DelegateHeaderRelatived, BlockHeader } from './types';
+import { NodeHeader, NodeInfo, nodetypeToNumber, DelegateInfo, DelegateHeaderRelatived, BlockHeader, numberToNodeType, NodeHeaderRequest } from './types';
 import { ChainNodeSubject } from './lib/ChainNodeSubject';
 import { ChainNodeStateMonitor } from './lib/ChainNodeStateMonitor';
 import { ChainNodeObserver } from "./lib/ChainNodeObserver";
@@ -50,7 +50,7 @@ export class ChainNodeService implements ChainNodeObserver {
         })();
     }
 
-    async addChainNode(node: NodeHeader) {
+    async addChainNode(node: NodeHeaderRequest) {
         const exists = await this.chainnodeRepository.count({
             ip: node.ip,
             port: node.port
@@ -59,15 +59,24 @@ export class ChainNodeService implements ChainNodeObserver {
             throw new Error("chainnode is already exists!");
         }
 
+        const nodeHeader: NodeHeader = {
+            ip: node.ip,
+            port: node.port,
+            name: node.name,
+            type: numberToNodeType(node.type)
+        }
+
         const nodeElem = new ChainNode();
-        nodeElem.ip = node.ip;
-        nodeElem.port = node.port;
-        nodeElem.type = nodetypeToNumber(node.type);
+        nodeElem.ip = nodeHeader.ip;
+        nodeElem.port = nodeHeader.port;
+        nodeElem.type = nodetypeToNumber(nodeHeader.type);
+        nodeElem.name = nodeHeader.name;
+        nodeElem.status = -1;
         nodeElem.id = uuid.v1();
 
         await this.chainnodeRepository.save(nodeElem);
 
-        const newMonitor = new ChainNodeStateMonitor(nodeElem.id, node);
+        const newMonitor = new ChainNodeStateMonitor(nodeElem.id, nodeHeader);
         newMonitor.attackObserver(this);
         this.subjects.set(nodeElem.id, newMonitor);
         console.log('newMonitor:', JSON.stringify({ id: nodeElem.id, node }));
@@ -76,7 +85,7 @@ export class ChainNodeService implements ChainNodeObserver {
     }
 
     async getChainNode(id: string) {
-        const findNode = await this.chainnodeRepository.findOne({ id: id });
+        const findNode = await this.chainnodeRepository.findOne({ id });
         if (findNode === undefined) {
             throw new Error('no chainnode exists with id(' + id + ')');
         }
@@ -86,7 +95,7 @@ export class ChainNodeService implements ChainNodeObserver {
     }
 
     async delChainNode(id: string) {
-        const findNode = await this.chainnodeRepository.findOne({ id: id });
+        const findNode = await this.chainnodeRepository.findOne({ id });
         if (findNode === undefined) {
             throw new Error('no chainnode exists with id(' + id + ')');
         }
@@ -104,7 +113,7 @@ export class ChainNodeService implements ChainNodeObserver {
     }
 
     async addDelegate(delegateRelatived: DelegateHeaderRelatived) {
-        const count = await this.delegateRepository.count({ address: delegateRelatived.publicKey });
+        const count = await this.delegateRepository.count({ publicKey: delegateRelatived.publicKey });
         if (count > 0) {
             throw new Error('delegate is already exists!');
         }
@@ -117,23 +126,23 @@ export class ChainNodeService implements ChainNodeObserver {
         await this.delegateRepository.save(delegateElem);
 
         if (this.subjects.has(delegateElem.nodeId)) {
-            this.subjects.get(delegateElem.nodeId).addDelegate(delegateElem.address);
+            this.subjects.get(delegateElem.nodeId).addDelegate(delegateElem.publicKey);
         }
 
         return delegateElem.publicKey;
     }
 
-    async getDelegate(publickey: string) {
-        const findDelegate = await this.delegateRepository.findOne({ publicKey: publickey });
+    async getDelegate(publicKey: string) {
+        const findDelegate = await this.delegateRepository.findOne({ publicKey });
         if (findDelegate === undefined) {
-            throw new Error('no delegate exists with address(' + publickey + ')');
+            throw new Error('no delegate exists with address(' + publicKey + ')');
         }
 
         return this.buildDelegateInfo(findDelegate);
     }
 
     async delDelegate(publicKey: string) {
-        const findDelegate = await this.delegateRepository.findOne({ publicKey: publicKey });
+        const findDelegate = await this.delegateRepository.findOne({ publicKey });
         if (findDelegate === undefined) {
             throw new Error('no delegate exists with address(' + publicKey + ')');
         }
@@ -255,6 +264,9 @@ export class ChainNodeService implements ChainNodeObserver {
         result.id = node.id;
         result.ip = node.ip;
         result.port = node.port;
+        result.name = node.name;
+        result.type = numberToNodeType(node.type);
+        result.status = node.status;
 
         result.lastestHeight = node.lastestHeight;
 
@@ -276,8 +288,10 @@ export class ChainNodeService implements ChainNodeObserver {
 
     private buildDelegateInfo(delegate: Delegate): DelegateInfo {
         const result: Partial<DelegateInfo> = {};
+        result.name = delegate.name;
         result.publicKey = delegate.publicKey;
         result.nodeId = delegate.nodeId;
+
         result.address = delegate.address;
 
         result.blockId = delegate.blockId;
