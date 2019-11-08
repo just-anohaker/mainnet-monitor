@@ -18,6 +18,17 @@ export class ChainNode {
     type: number;
 
     @Column({ nullable: true })
+    name: string;
+
+    @Column({
+        default: 0
+    })
+    status: number;
+
+    @Column({ nullable: true })
+    lastestHeight: number;
+
+    @Column({ nullable: true })
     generatorPublicKey: string;
 
     @Column({ nullable: true })

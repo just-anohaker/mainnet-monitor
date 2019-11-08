@@ -3,7 +3,7 @@ import { Entity, Column, PrimaryColumn } from 'typeorm';
 @Entity({ name: 'delegates' })
 export class Delegate {
     @PrimaryColumn()
-    address: string;
+    publicKey: string;
 
     @Column()
     nodeId: string;
@@ -12,7 +12,7 @@ export class Delegate {
     name: string;
 
     @Column({ nullable: true })
-    publicKey: string;
+    address: string;
 
     @Column({ nullable: true })
     blockId: string;

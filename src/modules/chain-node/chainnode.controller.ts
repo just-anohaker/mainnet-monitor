@@ -50,14 +50,38 @@ export class ChainNodeController {
         }
     }
 
+    @Get('all')
+    async allNodes() {
+        try {
+            const allNodesInfo = await this.chainnodeService.allNodes();
+
+            return buildResponseSuccess(allNodesInfo);
+        } catch (error) {
+
+            return buildResponseFailure(error.toString());
+        }
+    }
+
+    @Get('detail/all')
+    async allNodesDetails() {
+        try {
+            const allNodeDetails = await this.chainnodeService.allNodeDetails();
+
+            return buildResponseSuccess(allNodeDetails);
+        } catch (error) {
+
+            return buildResponseFailure(error.toString());
+        }
+    }
+
     @Post('delegate')
     async addDelegate(@Body() delegateRelatived: DelegateHeaderRelatived) {
         // TODO: validate id
 
         try {
-            const address = await this.chainnodeService.addDelegate(delegateRelatived);
+            const publicKey = await this.chainnodeService.addDelegate(delegateRelatived);
 
-            return buildResponseSuccess({ address });
+            return buildResponseSuccess({ publicKey });
         } catch (error) {
 
             return buildResponseFailure(error.toString());
@@ -65,11 +89,11 @@ export class ChainNodeController {
     }
 
     @Get('delegate')
-    async getDelegate(@Query('address') address: string) {
+    async getDelegate(@Query('publicKey') publicKey: string) {
         //TODO: validate address
 
         try {
-            const delegateInfo = await this.chainnodeService.getDelegate(address);
+            const delegateInfo = await this.chainnodeService.getDelegate(publicKey);
 
             return buildResponseSuccess(delegateInfo);
         } catch (error) {
@@ -79,13 +103,25 @@ export class ChainNodeController {
     }
 
     @Post('delegate/del')
-    async delDelegate(@Body() { address }: { address: string }) {
+    async delDelegate(@Body() { publicKey }: { publicKey: string }) {
         // TODO: validate address
 
         try {
-            const delegateInfo = await this.chainnodeService.delDelegate(address);
+            const delegateInfo = await this.chainnodeService.delDelegate(publicKey);
 
             return buildResponseSuccess(delegateInfo);
+        } catch (error) {
+
+            return buildResponseFailure(error.toString());
+        }
+    }
+
+    @Get('delegate/all')
+    async allDelegates() {
+        try {
+            const allDelegates = await this.chainnodeService.allDelegates();
+
+            return buildResponseSuccess(allDelegates);
         } catch (error) {
 
             return buildResponseFailure(error.toString());

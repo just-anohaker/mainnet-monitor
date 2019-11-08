@@ -11,7 +11,7 @@ import ChainNodeModule from './modules/chain-node';
     imports: [
         TypeOrmModule.forRoot({
             type: 'sqlite',
-            database: 'data.db',
+            database: 'app.db',
             entities: [ChainNode, Delegate],
             synchronize: true
         }),

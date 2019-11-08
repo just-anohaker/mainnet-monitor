@@ -28,12 +28,12 @@ export function numberToNodeType(type: number): NodeType {
 export interface NodeHeader {
     ip: string;
     port: number;
-    type: NodeType;
+    type?: NodeType;
 }
 
 export interface DelegateHeader {
     name: string;
-    address: string;
+    publicKey: string;
 }
 
 export interface DelegateHeaderRelatived extends DelegateHeader {
@@ -43,6 +43,7 @@ export interface DelegateHeaderRelatived extends DelegateHeader {
 export interface NodeInfo extends NodeHeader {
     id: string;
 
+    lastestHeight?: number;
     generatorPublicKey?: string;
     generatorAddress?: string;
     blockId?: string;
@@ -56,7 +57,7 @@ export interface NodeInfo extends NodeHeader {
 export interface DelegateInfo extends DelegateHeader {
     nodeId: string;
 
-    publicKey?: string;
+    address?: string;
     blockId?: string;
     blockHeight?: number;
     blockTimestamp?: number;
@@ -69,4 +70,12 @@ export interface BlockHeader {
     generatorAddress: string;
     height: number;
     timestamp: number;
+}
+
+export type JsonObject = {
+    [key: string]: any;
+}
+
+export type BlockHeightResponse = {
+    height: number;
 }
