@@ -39,7 +39,6 @@ export class ChainNodeController {
     @Post('del')
     async delNode(@Body() { id }: { id: string }) {
         // TODO: validate id
-        console.log('delNode:', id);
         try {
             const delNodeInfo = await this.chainnodeService.delChainNode(id);
 

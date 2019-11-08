@@ -13,6 +13,14 @@ import { ChainNodeStateMonitor } from './lib/ChainNodeStateMonitor';
 import { ChainNodeObserver } from "./lib/ChainNodeObserver";
 import { EVT_DELEGATE_UPDATE, EVT_HEIGHT_UPDATE, EVT_NODE_UPDATE } from '../../common';
 
+const NullableBlockHeader: BlockHeader = {
+    id: null,
+    generatorPublicKey: null,
+    generatorAddress: null,
+    height: null,
+    timestamp: null
+};
+
 @Injectable()
 @WebSocketGateway()
 export class ChainNodeService implements ChainNodeObserver {
@@ -99,13 +107,14 @@ export class ChainNodeService implements ChainNodeObserver {
         if (findNode === undefined) {
             throw new Error('no chainnode exists with id(' + id + ')');
         }
-        await this.chainnodeRepository.remove(findNode);
+        await this.chainnodeRepository.delete(findNode);
 
         const findDelegates = await this.delegateRepository.find({ nodeId: id }) || [];
         await this.delegateRepository.remove(findDelegates);
 
         if (this.subjects.has(findNode.id)) {
             this.subjects.get(findNode.id).detachObserver(this);
+            this.subjects.get(findNode.id).destory();
             this.subjects.delete(findNode.id);
         }
 
@@ -147,11 +156,13 @@ export class ChainNodeService implements ChainNodeObserver {
             throw new Error('no delegate exists with address(' + publicKey + ')');
         }
 
-        await this.delegateRepository.remove(findDelegate);
+        await this.delegateRepository.delete(findDelegate);
 
         if (this.subjects.has(findDelegate.nodeId)) {
             this.subjects.get(findDelegate.nodeId).removeDelegate(findDelegate.publicKey);
         }
+
+        await this.updateNode(findDelegate.nodeId);
 
         return this.buildDelegateInfo(findDelegate);
     }
@@ -240,17 +251,33 @@ export class ChainNodeService implements ChainNodeObserver {
         }
     }
 
-    private async updateNode(nodeId: string, block: BlockHeader) {
+    private async updateNode(nodeId: string, block?: BlockHeader) {
         const chainNode = await this.chainnodeRepository.findOne({ id: nodeId });
         if (chainNode !== undefined) {
             chainNode.status = 0;
 
-            chainNode.blockHeight = block.height;
-            chainNode.blockId = block.id;
-            chainNode.generatorPublicKey = block.generatorPublicKey;
-            chainNode.generatorAddress = block.generatorAddress;
-            chainNode.blockTimestamp = block.timestamp;
-            chainNode.blockDate = this.translateTimestamp(block.timestamp);
+            const delegates = await this.delegateRepository.find({ nodeId });
+            const tmpDelegateNodes: BlockHeader[] = [];
+            if (delegates.length > 0) {
+                block && tmpDelegateNodes.push(block);
+                for (const val of delegates) {
+                    tmpDelegateNodes.push({
+                        height: val.blockHeight,
+                        id: val.blockId,
+                        generatorPublicKey: val.publicKey,
+                        generatorAddress: val.address,
+                        timestamp: val.blockTimestamp,
+                    });
+                }
+            }
+            tmpDelegateNodes.sort((a: BlockHeader, b: BlockHeader) => b.height - a.height);
+            const newBlock = tmpDelegateNodes.length !== 0 ? tmpDelegateNodes[0] : NullableBlockHeader;
+            chainNode.blockHeight = newBlock.height;
+            chainNode.blockId = newBlock.id;
+            chainNode.generatorPublicKey = newBlock.generatorPublicKey;
+            chainNode.generatorAddress = newBlock.generatorAddress;
+            chainNode.blockTimestamp = newBlock.timestamp;
+            chainNode.blockDate = newBlock.timestamp == null ? null : this.translateTimestamp(newBlock.timestamp);
 
             this.chainnodeRepository.save(chainNode);
 

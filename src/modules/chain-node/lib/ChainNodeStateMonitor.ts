@@ -90,6 +90,11 @@ export class ChainNodeStateMonitor implements ChainNodeSubject {
         return true;
     }
 
+    async destory() {
+        this.ioClient.close();
+        clearTimeout(this.timeoutMonitor);
+    }
+
     /// -----------------------------------------------------------------------
     private onTimeout() {
         (async () => {

@@ -12,4 +12,6 @@ export interface ChainNodeSubject {
     hasDelegate(delegate: string): Promise<boolean>;
 
     removeDelegate(delegate: string): Promise<boolean>;
+
+    destory(): Promise<void>;
 }
