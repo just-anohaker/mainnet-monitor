@@ -1,9 +1,10 @@
 import io, { Socket } from "socket.io-client";
 
 import { ChainNodeSubject } from './ChainNodeSubject';
-import { NodeHeader, BlockHeader, JsonObject, BlockHeightResponse } from '../types';
+import { NodeHeader, BlockHeader } from '../types';
 import { ChainNodeObserver } from './ChainNodeObserver';
 import { NodeClient } from './NodeClient';
+import { JsonObject } from '../../../common';
 
 export class ChainNodeStateMonitor implements ChainNodeSubject {
     private static TIMEOUT_INTERVAL: number = 10 * 1000;
@@ -105,7 +106,7 @@ export class ChainNodeStateMonitor implements ChainNodeSubject {
         })();
     }
 
-    private onBlockChange({ height }: BlockHeightResponse) {
+    private onBlockChange({ height }: { height: number }) {
         // const msg = `onBlockChange(${this.id}, ${height})`;
         // console.log(msg);
         clearTimeout(this.timeoutMonitor);
@@ -187,7 +188,7 @@ export class ChainNodeStateMonitor implements ChainNodeSubject {
             id: block.id,
             height: block.height,
             generatorPublicKey: block.generatorPublicKey,
-            generatorAddress: block.generatorId,
+            generatorId: block.generatorId,
             timestamp: block.timestamp
         };
 

@@ -1,7 +1,7 @@
 import { Controller, Get, UseGuards, Req, Query, Post, Body } from '@nestjs/common';
 import { ChainNodeService } from './chainnode.service';
 
-import { DelegateHeaderRelatived, numberToNodeType, NodeHeaderRequest } from "./types";
+import { NodeHeader, DelegateHeader, Idable } from "./types";
 import { buildResponseFailure, buildResponseSuccess } from "../../common";
 
 @Controller('api/chain')
@@ -11,7 +11,7 @@ export class ChainNodeController {
     ) { }
 
     @Post()
-    async addNode(@Body() node: NodeHeaderRequest) {
+    async addNode(@Body() node: NodeHeader) {
         // TODO: validate node
         try {
             const nodeId = await this.chainnodeService.addChainNode(node);
@@ -74,7 +74,7 @@ export class ChainNodeController {
     }
 
     @Post('delegate')
-    async addDelegate(@Body() delegateRelatived: DelegateHeaderRelatived) {
+    async addDelegate(@Body() delegateRelatived: DelegateHeader & Idable) {
         // TODO: validate id
 
         try {

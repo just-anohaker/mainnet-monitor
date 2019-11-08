@@ -1,5 +1,4 @@
 import { Entity, Column, PrimaryColumn } from 'typeorm';
-import { NodeType } from '../types';
 
 @Entity({ name: 'chainnodes' })
 export class ChainNode {

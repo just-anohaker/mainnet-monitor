@@ -7,16 +7,16 @@ import uuid from 'uuid';
 
 import { ChainNode } from './models/node.entity';
 import { Delegate } from './models/delegate.entity';
-import { NodeHeader, NodeInfo, nodetypeToNumber, DelegateInfo, DelegateHeaderRelatived, BlockHeader, numberToNodeType, NodeHeaderRequest } from './types';
+import { NodeHeader, NodeDetail, DelegateDetail, Idable, BlockHeader, DelegateHeader } from './types';
 import { ChainNodeSubject } from './lib/ChainNodeSubject';
 import { ChainNodeStateMonitor } from './lib/ChainNodeStateMonitor';
 import { ChainNodeObserver } from "./lib/ChainNodeObserver";
-import { EVT_DELEGATE_UPDATE, EVT_HEIGHT_UPDATE, EVT_NODE_UPDATE } from '../../common';
+import { EVT_DELEGATE_UPDATE, EVT_HEIGHT_UPDATE, EVT_NODE_UPDATE } from '../../app.constants';
 
 const NullableBlockHeader: BlockHeader = {
     id: null,
     generatorPublicKey: null,
-    generatorAddress: null,
+    generatorId: null,
     height: null,
     timestamp: null
 };
@@ -58,7 +58,7 @@ export class ChainNodeService implements ChainNodeObserver {
         })();
     }
 
-    async addChainNode(node: NodeHeaderRequest) {
+    async addChainNode(node: NodeHeader) {
         const exists = await this.chainnodeRepository.count({
             ip: node.ip,
             port: node.port
@@ -71,13 +71,13 @@ export class ChainNodeService implements ChainNodeObserver {
             ip: node.ip,
             port: node.port,
             name: node.name,
-            type: numberToNodeType(node.type)
+            type: node.type
         }
 
         const nodeElem = new ChainNode();
         nodeElem.ip = nodeHeader.ip;
         nodeElem.port = nodeHeader.port;
-        nodeElem.type = nodetypeToNumber(nodeHeader.type);
+        nodeElem.type = nodeHeader.type;
         nodeElem.name = nodeHeader.name;
         nodeElem.status = -1;
         nodeElem.id = uuid.v1();
@@ -121,7 +121,7 @@ export class ChainNodeService implements ChainNodeObserver {
         return this.buildNodeInfo(findNode, findDelegates);
     }
 
-    async addDelegate(delegateRelatived: DelegateHeaderRelatived) {
+    async addDelegate(delegateRelatived: DelegateHeader & Idable) {
         const count = await this.delegateRepository.count({ publicKey: delegateRelatived.publicKey });
         if (count > 0) {
             throw new Error('delegate is already exists!');
@@ -170,7 +170,7 @@ export class ChainNodeService implements ChainNodeObserver {
     async allNodes() {
         const chainnodes = await this.chainnodeRepository.find();
 
-        const result: NodeInfo[] = [];
+        const result: NodeDetail[] = [];
         for (const val of chainnodes) {
             result.push(this.buildNodeInfo(val, []));
         }
@@ -181,7 +181,7 @@ export class ChainNodeService implements ChainNodeObserver {
     async allNodeDetails() {
         const chainnodes = await this.chainnodeRepository.find();
 
-        const result: NodeInfo[] = [];
+        const result: NodeDetail[] = [];
         for (const val of chainnodes) {
             const relativedDelegates = await this.delegateRepository.find({ nodeId: val.id });
             result.push(this.buildNodeInfo(val, relativedDelegates));
@@ -192,7 +192,7 @@ export class ChainNodeService implements ChainNodeObserver {
     async allDelegates() {
         const delegates = await this.delegateRepository.find();
 
-        const result: DelegateInfo[] = [];
+        const result: DelegateDetail[] = [];
         for (const val of delegates) {
             result.push(this.buildDelegateInfo(val));
         }
@@ -224,7 +224,7 @@ export class ChainNodeService implements ChainNodeObserver {
             publicKey: delegatePublicKey
         });
         if (delegate !== undefined) {
-            delegate.address = block.generatorAddress;
+            delegate.address = block.generatorId;
             delegate.blockId = block.id;
             delegate.blockHeight = block.height;
             delegate.blockTimestamp = block.timestamp;
@@ -265,7 +265,7 @@ export class ChainNodeService implements ChainNodeObserver {
                         height: val.blockHeight,
                         id: val.blockId,
                         generatorPublicKey: val.publicKey,
-                        generatorAddress: val.address,
+                        generatorId: val.address,
                         timestamp: val.blockTimestamp,
                     });
                 }
@@ -275,7 +275,7 @@ export class ChainNodeService implements ChainNodeObserver {
             chainNode.blockHeight = newBlock.height;
             chainNode.blockId = newBlock.id;
             chainNode.generatorPublicKey = newBlock.generatorPublicKey;
-            chainNode.generatorAddress = newBlock.generatorAddress;
+            chainNode.generatorAddress = newBlock.generatorId;
             chainNode.blockTimestamp = newBlock.timestamp;
             chainNode.blockDate = newBlock.timestamp == null ? null : this.translateTimestamp(newBlock.timestamp);
 
@@ -286,13 +286,13 @@ export class ChainNodeService implements ChainNodeObserver {
         }
     }
 
-    private buildNodeInfo(node: ChainNode, delegates: Delegate[]): NodeInfo {
-        const result: Partial<NodeInfo> = {};
+    private buildNodeInfo(node: ChainNode, delegates: Delegate[]): NodeDetail {
+        const result: Partial<NodeDetail> = {};
         result.id = node.id;
         result.ip = node.ip;
         result.port = node.port;
         result.name = node.name;
-        result.type = numberToNodeType(node.type);
+        result.type = node.type;
         result.status = node.status;
 
         result.lastestHeight = node.lastestHeight;
@@ -310,14 +310,14 @@ export class ChainNodeService implements ChainNodeObserver {
             result.delegates.push(this.buildDelegateInfo(value));
         }
 
-        return result as NodeInfo;
+        return result as NodeDetail;
     }
 
-    private buildDelegateInfo(delegate: Delegate): DelegateInfo {
-        const result: Partial<DelegateInfo> = {};
+    private buildDelegateInfo(delegate: Delegate): DelegateDetail {
+        const result: Partial<DelegateDetail> = {};
         result.name = delegate.name;
         result.publicKey = delegate.publicKey;
-        result.nodeId = delegate.nodeId;
+        result.id = delegate.nodeId;
 
         result.address = delegate.address;
 
@@ -326,7 +326,7 @@ export class ChainNodeService implements ChainNodeObserver {
         result.blockTimestamp = delegate.blockTimestamp;
         result.blockDate = delegate.blockDate;
 
-        return result as DelegateInfo;
+        return result as DelegateDetail;
     }
 
     private translateTimestamp(timestamp: number): number {

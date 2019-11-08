@@ -1,94 +1,59 @@
-export enum NodeType {
-    GPU = 'gpu',
-    SEED = 'seed',
-    WALLET = 'wallet',
-    UNDEFINED = 'undefined'
-}
-
-export enum NodeStatusType {
-
-}
-
-export function nodetypeToNumber(nodetype: NodeType): number {
-    switch (nodetype) {
-        case NodeType.GPU: return 0;
-        case NodeType.SEED: return 1;
-        case NodeType.WALLET: return 2;
-
-        default: return -1;
-    }
-}
-
-export function numberToNodeType(type: number): NodeType {
-    switch (type) {
-        case 0: return NodeType.GPU;
-        case 1: return NodeType.SEED;
-        case 2: return NodeType.WALLET;
-
-        default: return NodeType.UNDEFINED;
-    }
-}
-
-export interface NodeHeaderRequest {
-    ip: string;
-    port: number;
-    type?: number;
-    name?: string;
-}
-
-export interface NodeHeader {
-    ip: string;
-    port: number;
-    type?: NodeType;
-    name?: string;
-}
-
-export interface DelegateHeader {
+export interface Nameable {
     name: string;
-    publicKey: string;
 }
 
-export interface DelegateHeaderRelatived extends DelegateHeader {
+export interface Serverable {
+    ip: string;
+    port: number;
+}
+
+export interface Idable {
     id: string;
 }
 
-export interface NodeInfo extends NodeHeader {
-    id: string;
-    status: number;
-
-    lastestHeight?: number;
-    generatorPublicKey?: string;
-    generatorAddress?: string;
-    blockId?: string;
-    blockHeight?: number;
-    blockTimestamp?: number;
-    blockDate?: number;
-
-    delegates?: DelegateInfo[];
+export interface Blockable {
+    blockId: string;
+    blockHeight: number;
+    blockTimestamp: number;
+    blockDate: number;
 }
 
-export interface DelegateInfo extends DelegateHeader {
-    nodeId: string;
-
-    address?: string;
-    blockId?: string;
-    blockHeight?: number;
-    blockTimestamp?: number;
-    blockDate?: number;
+export interface Generatorable {
+    generatorPublicKey: string;
+    generatorAddress: string;
 }
+
+export type NodeHeader = Serverable
+    & Partial<Nameable>
+    & { type?: number; };
+
+export type DelegateHeader = Partial<Nameable>
+    & { publicKey: string; };
+
+export type NodeDetail = Idable
+    & Serverable
+    & Nameable
+    & Blockable
+    & Generatorable
+    & {
+        status: number;
+        type: number;
+        lastestHeight: number;
+        delegates: DelegateDetail[];
+    };
+
+export type DelegateDetail = Nameable
+    & Idable
+    & Blockable
+    & {
+        publicKey: string;
+        address?: string;
+    };
 
 export interface BlockHeader {
     id: string;
+    height: number;
     generatorPublicKey: string;
-    generatorAddress: string;
-    height: number;
+    generatorId: string;
     timestamp: number;
-}
-
-export type JsonObject = {
-    [key: string]: any;
-}
-
-export type BlockHeightResponse = {
-    height: number;
 }

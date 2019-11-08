@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { JsonObject } from '../types';
+import { JsonObject } from '../../../common';
 
 export class NodeClient {
     async get(url: string, params: JsonObject = {}): Promise<JsonObject> {
