@@ -1,75 +1,245 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo_text.svg" width="320" alt="Nest Logo" /></a>
-</p>
+# API
 
-[travis-image]: https://api.travis-ci.org/nestjs/nest.svg?branch=master
-[travis-url]: https://travis-ci.org/nestjs/nest
-[linux-image]: https://img.shields.io/travis/nestjs/nest/master.svg?label=linux
-[linux-url]: https://travis-ci.org/nestjs/nest
+## Http API
+
+#### 添加节点
+
+```
+POST - /api/chain
+```
+
+添加新节点信息
+
+参数
+
+| 字段 | 类型   | 说明                                        |
+| ---- | ------ | ------------------------------------------- |
+| ip   | string | 节点ip地址                                  |
+| port | number | 节点端口                                    |
+| name | string | [Optional]节点名称                          |
+| type | number | [Optional]节点类型(0: GPU,1:Seed, 2:Wallet) |
+
+返回
+
+| 字段 | 类型   | 说明           |
+| ---- | ------ | -------------- |
+| id   | string | 添加节点的id值 |
+
+#### 获取节点信息
+
+```
+GET - /api/chain
+```
+
+参数
+
+| 字段         | 类型    | 说明                                   |
+| ------------ | ------- | -------------------------------------- |
+| id           | string  | 节点id值                               |
+| withDelegate | boolean | [Optional]是否获取节点包含的代理人信息 |
+
+返回
+
+**参见'NodeInfo'**
+
+#### 删除节点
+
+```
+POST - /api/chain/del
+```
+
+参数
+
+| 字段 | 类型   | 说明       |
+| ---- | ------ | ---------- |
+| id   | string | 节点id信息 |
+
+返回
+
+**参见'NodeInfo'**
+
+#### 获取所有节点信息
+
+```
+GET - /api/chain/all
+```
+
+参数
+
+| 字段          | 类型    | 说明                           |
+| ------------- | ------- | ------------------------------ |
+| withDelegates | boolean | 节点信息是否包所属的代理人列表 |
+
+返回
+
+**参见'NodeInfo'**     -  当withDelegates为true时，结构中的delegates字段有效
+
+#### 添加代理人
+
+```
+POST - /api/chain/delegate
+```
+
+参数
+
+| 字段      | 类型   | 说明                 |
+| --------- | ------ | -------------------- |
+| id        | string | 待添加到的节点id     |
+| publicKey | string | 代理人公钥           |
+| name      | string | [Optional]代理人名字 |
+
+返回
+
+| 字段      | 类型   | 说明       |
+| --------- | ------ | ---------- |
+| publicKey | string | 代理人公钥 |
+
+#### 获取代理人信息
+
+```
+GET - /api/chain/delegate
+```
+
+参数
+
+| 字段      | 类型   | 说明             |
+| --------- | ------ | ---------------- |
+| publicKey | string | 查询的代理人公钥 |
+
+返回
+
+参见'DelegateInfo'
+
+#### 删除代理人信息
+
+```
+POST - /api/chain/delegate/del
+```
+
+参数
+
+| 字段      | 类型   | 说明             |
+| --------- | ------ | ---------------- |
+| publicKey | string | 删除的代理人公钥 |
+
+返回
+
+参见'DelegateInfo'
+
+#### 获取所有代理人信息
+
+```
+GET - /api/chain/delegate/all
+```
+
+参数 - 无
+
+返回
+
+参见'DelegateInfo'
+
+
+
+## SocketIO API
+
+#####  添加节点
+
+```
+EVENT - 'node/add'
+DATA = nodeId: string;
+```
+
+##### 删除节点
+
+```
+EVENT - 'node/remove'
+DATA = nodeId: string;
+```
+
+##### 添加代理人
+
+```
+EVENT - 'delegate/add'
+DATA = delegatePublicKey: string;
+```
+
+##### 删除代理人
+
+```
+EVENT - 'delegate/remove'
+DATA = delegatePublicKey: string;
+```
+
+##### 节点高度更新
+
+```
+EVENT - 'height/update'
+DATA = nodeInfo: NodeInfo;
+```
+
+##### 节点信息更新
+
+```
+EVENT - 'node/update'
+DATA = nodeInfo: NodeInfo;
+```
+
+##### 代理人信息更新
+
+```
+EVENT - 'delegate/update'
+DATA = delegateInfo: DelegateInfo;
+```
+
+##### 节点状态更新
+
+```
+EVENT - 'status/update'
+DATA = status: number;
+```
+
+
+
+##  数据结构
+
+NodeInfo
+
+```typescript
+interface NodeInfo {	
+  id: string;											// 节点id
+  ip: string;											// 节点ip
+  port: number;										// 节点端口
+  name?: string;									// 节点名字
+  type?: number;									// 节点类型(0:GPU,1:Seed,2:Wallet)
   
-  <p align="center">A progressive <a href="http://nodejs.org" target="blank">Node.js</a> framework for building efficient and scalable server-side applications, heavily inspired by <a href="https://angular.io" target="blank">Angular</a>.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore"><img src="https://img.shields.io/npm/dm/@nestjs/core.svg" alt="NPM Downloads" /></a>
-<a href="https://travis-ci.org/nestjs/nest"><img src="https://api.travis-ci.org/nestjs/nest.svg?branch=master" alt="Travis" /></a>
-<a href="https://travis-ci.org/nestjs/nest"><img src="https://img.shields.io/travis/nestjs/nest/master.svg?label=linux" alt="Linux" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#5" alt="Coverage" /></a>
-<a href="https://gitter.im/nestjs/nestjs?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=body_badge"><img src="https://badges.gitter.im/nestjs/nestjs.svg" alt="Gitter" /></a>
-<a href="https://opencollective.com/nest#backer"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec"><img src="https://img.shields.io/badge/Donate-PayPal-dc3d53.svg"/></a>
-  <a href="https://twitter.com/nestframework"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Installation
-
-```bash
-$ npm install
+  status: number;									// 节点状态(0:正常,-1:异常: 1:更新中)
+  
+  lastestHeight: number;					// 节点区块最新高度
+  
+  blockId: string;								// 节点代理人最新出块Id
+  blockHeight: number;						// 节点代理人最新出块高度
+  blockTimestamp: number;					// 节点代理人最新出块时间戳
+  blockDate: number;							// 节点代理人最新出块的时间(millisecond)
+  generatorPublicKey: string;			// 节点代理人最新出块的代理人公钥
+  generatorAddress: string;				// 节点代理人最新出块的代理人地址
+  
+  delegates: DelegateInfo[];			// 节点代理人信息
+}
 ```
 
-## Running the app
+DelegateInfo
 
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+```typescript
+interface DelegateInfo {
+  id: string;											// 代理人所属的节点Id
+  publicKey: string;							// 代理人公钥	
+  name?: string;									// 代理人名字
+  address: string;								// 代理人地址
+  
+  blockId: string;								// 代理人最新出块Id
+  blockHeight: number;						// 代理人最新出块高度
+  blockTimestamp: number;					// 代理人最新出块时间戳
+  blockDate: number;							// 代理人最新出块时间(millisecond)
+}
 ```
 
-## Test
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-  Nest is [MIT licensed](LICENSE).

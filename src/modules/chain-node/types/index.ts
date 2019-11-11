@@ -37,7 +37,7 @@ export type NodeDetail = Idable
     & Generatorable
     & {
         status: number;
-        type: number;
+        type?: number;
         lastestHeight: number;
         delegates: DelegateDetail[];
     };

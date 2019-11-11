@@ -8,27 +8,33 @@ import { JsonObject } from '../../../common';
 
 export class ChainNodeStateMonitor implements ChainNodeSubject {
     private static TIMEOUT_INTERVAL: number = 10 * 1000;
+    private static STATUS_INTERVAL: number = 15 * 1000;
+    private static STATUS_TRY_TIMES: number = 5;
 
     private observers: ChainNodeObserver[];
     private delegates: string[];
     private ioClient: typeof Socket;
     private nodeClient: NodeClient;
     private timeoutMonitor?: NodeJS.Timeout;
+    private statusHandler?: NodeJS.Timeout;
+    private tryTimes: number;
 
     constructor(private readonly id: string, private readonly nodeheader: NodeHeader) {
         this.observers = [];
         this.delegates = [];
         this.nodeClient = new NodeClient();
+        this.tryTimes = 0;
 
         this.onBlockChange = this.onBlockChange.bind(this);
         this.onTimeout = this.onTimeout.bind(this);
+        this.onNodeStatus = this.onNodeStatus.bind(this);
 
         this.ioClient = io(this.buildIoServer());
         this.ioClient.on('blocks/change', this.onBlockChange);
         function buildInfo(nodeId: string, event: string): [string, () => void] {
             return [
                 event,
-                (...args: any) => console.log(nodeId, event, ...args)
+                (...args: any[]) => console.log(nodeId, event, JSON.stringify(args))
             ];
         }
         this.ioClient.on(...buildInfo(this.id, 'connect'));
@@ -38,6 +44,7 @@ export class ChainNodeStateMonitor implements ChainNodeSubject {
         this.initNode();
 
         this.timeoutMonitor = setTimeout(this.onTimeout, 15 * 1000);
+        this.statusHandler = setTimeout(this.onNodeStatus, ChainNodeStateMonitor.STATUS_INTERVAL);
     }
 
     get Id(): string {
@@ -94,6 +101,7 @@ export class ChainNodeStateMonitor implements ChainNodeSubject {
     async destory() {
         this.ioClient.close();
         clearTimeout(this.timeoutMonitor);
+        clearTimeout(this.statusHandler);
     }
 
     /// -----------------------------------------------------------------------
@@ -112,8 +120,30 @@ export class ChainNodeStateMonitor implements ChainNodeSubject {
         clearTimeout(this.timeoutMonitor);
         (async () => {
             await this.getBlock(height);
+            this.timeoutMonitor = setTimeout(this.onTimeout, ChainNodeStateMonitor.TIMEOUT_INTERVAL);
         })();
-        this.timeoutMonitor = setTimeout(this.onTimeout, ChainNodeStateMonitor.TIMEOUT_INTERVAL);
+    }
+
+    private onNodeStatus() {
+        (async () => {
+            try {
+                const status = await this.getStatus();
+                for (const val of this.observers) {
+                    val.onNodeStatusChanged(this.id, status);
+                }
+                this.tryTimes = 0;
+            } catch (error) {
+                console.log('onNodeStatus error:', this.tryTimes + 1);
+                this.tryTimes++;
+                if (this.tryTimes > ChainNodeStateMonitor.STATUS_TRY_TIMES) {
+                    // 
+                    for (const val of this.observers) {
+                        val.onNodeStatusChanged(this.id, -1);
+                    }
+                }
+            }
+            this.statusHandler = setTimeout(this.onNodeStatus, ChainNodeStateMonitor.STATUS_INTERVAL);
+        })();
     }
 
     private buildIoServer() {
@@ -132,12 +162,16 @@ export class ChainNodeStateMonitor implements ChainNodeSubject {
         return this.buildIoServer() + '/api/blocks';
     }
 
+    private buildGetStatusUrl() {
+        return this.buildIoServer() + '/api/loader/status/sync';
+    }
+
     private async initNode() {
         try {
             const heightResp = await this.nodeClient.get(this.buildGetHeightUrl());
             await this.getBlock(heightResp.height);
         } catch (error) {
-            console.log('initNode: ', error);
+            console.log('initNode: ', error.toString());
         }
     }
 
@@ -160,7 +194,7 @@ export class ChainNodeStateMonitor implements ChainNodeSubject {
                 await val.onDelegateChanged(this.id, delegate, blockHeader);
             }
         } catch (error) {
-            console.log('initDelegate: ', error);
+            console.log('initDelegate: ', error.toString());
         }
     }
 
@@ -179,8 +213,15 @@ export class ChainNodeStateMonitor implements ChainNodeSubject {
                 }
             }
         } catch (error) {
-            console.log('getBlock: ', error);
+            console.log('getBlock: ', error.toString());
         }
+    }
+
+    private async getStatus() {
+        await this.nodeClient.get(this.buildGetHeightUrl(), {});
+
+        const statusResp = await this.nodeClient.get(this.buildGetStatusUrl(), {});
+        return statusResp.syncing ? 1 : 0;
     }
 
     private buildBlockHeader(block: JsonObject): BlockHeader {

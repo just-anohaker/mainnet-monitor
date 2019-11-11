@@ -24,12 +24,18 @@ export class ChainNodeController {
     }
 
     @Get()
-    async getNode(@Query('id') id: string) {
+    async getNode(@Query('id') id: string, @Query('withDelegates') withDelegates: boolean) {
         // TODO: validate id
         try {
-            const chainNodeInfo = await this.chainnodeService.getChainNode(id);
+            if (withDelegates) {
+                const chainNodeInfo = await this.chainnodeService.getChainNodeWithDelegates(id);
 
-            return buildResponseSuccess(chainNodeInfo);
+                return buildResponseSuccess(chainNodeInfo);
+            } else {
+                const chainNodeInfo = await this.chainnodeService.getChainNode(id);
+
+                return buildResponseSuccess(chainNodeInfo);
+            }
         } catch (error) {
 
             return buildResponseFailure(error.toString());
@@ -50,23 +56,18 @@ export class ChainNodeController {
     }
 
     @Get('all')
-    async allNodes() {
+    async allNodes(@Query('withDelegates') withDelegates: boolean) {
+        // TODO: validate withDelegate
         try {
-            const allNodesInfo = await this.chainnodeService.allNodes();
+            if (withDelegates) {
+                const allNodesInfo = await this.chainnodeService.allNodeDetails();
 
-            return buildResponseSuccess(allNodesInfo);
-        } catch (error) {
+                return buildResponseSuccess(allNodesInfo);
+            } else {
+                const allNodesInfo = await this.chainnodeService.allNodes();
 
-            return buildResponseFailure(error.toString());
-        }
-    }
-
-    @Get('detail/all')
-    async allNodesDetails() {
-        try {
-            const allNodeDetails = await this.chainnodeService.allNodeDetails();
-
-            return buildResponseSuccess(allNodeDetails);
+                return buildResponseSuccess(allNodesInfo);
+            }
         } catch (error) {
 
             return buildResponseFailure(error.toString());
