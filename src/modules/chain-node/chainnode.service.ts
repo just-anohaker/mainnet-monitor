@@ -269,7 +269,7 @@ export class ChainNodeService implements ChainNodeObserver {
             findNode.status = status;
             await this.chainnodeRepository.save(findNode);
 
-            this.server.emit(EVT_STATUS_UPDATE, status);
+            this.server.emit(EVT_STATUS_UPDATE, findNode);
         }
     }
 
@@ -286,7 +286,7 @@ export class ChainNodeService implements ChainNodeObserver {
             delegate.blockTimestamp = block.timestamp;
             delegate.blockDate = this.translateTimestamp(block.timestamp);
 
-            this.delegateRepository.save(delegate);
+            await this.delegateRepository.save(delegate);
 
             // TODO
             this.server.emit(EVT_DELEGATE_UPDATE, this.buildDelegateInfo(delegate));
@@ -300,7 +300,7 @@ export class ChainNodeService implements ChainNodeObserver {
 
             chainNode.lastestHeight = block.height;
 
-            this.chainnodeRepository.save(chainNode);
+            await this.chainnodeRepository.save(chainNode);
 
             // TODO
             this.server.emit(EVT_HEIGHT_UPDATE, this.buildNodeInfo(chainNode, []));
@@ -335,7 +335,7 @@ export class ChainNodeService implements ChainNodeObserver {
             chainNode.blockTimestamp = newBlock.timestamp;
             chainNode.blockDate = newBlock.timestamp == null ? null : this.translateTimestamp(newBlock.timestamp);
 
-            this.chainnodeRepository.save(chainNode);
+            await this.chainnodeRepository.save(chainNode);
 
             // TODO
             this.server.emit(EVT_NODE_UPDATE, this.buildNodeInfo(chainNode, []));
