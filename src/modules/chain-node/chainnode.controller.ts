@@ -9,7 +9,7 @@ import { buildResponseFailure, buildResponseSuccess } from "../../common";
 
 @Controller('api/chain')
 export class ChainNodeController {
-    private logger: Logger = new Logger('ChainNodeController');
+    private logger: Logger = new Logger('ChainNodeController', true);
     constructor(
         private readonly chainnodeService: ChainNodeService,
         private readonly entityService: ChainNodeEntityService,
@@ -21,7 +21,7 @@ export class ChainNodeController {
         this.logger.log(`addNode {${JSON.stringify(body)}}`);
         // TODO: validate node
         try {
-            const newNode = await this.entityService.addNode(body);
+            const newNode = await this.entityService.createNode(body);
             await this.chainnodeService.addNode(newNode);
 
             await this.ioService.emitNodeAdded(newNode.id);
@@ -33,7 +33,7 @@ export class ChainNodeController {
     }
 
     @Get()
-    async getNode(@Query('id') id: string, @Query('withDelegates') withDelegates: boolean) {
+    async getNode(@Query('id') id: string, @Query('withDelegates') withDelegates: boolean = false) {
         this.logger.log(`getNode {${id}, ${withDelegates}}`);
         // TODO: validate id
         try {
@@ -69,7 +69,7 @@ export class ChainNodeController {
     }
 
     @Get('all')
-    async allNodes(@Query('withDelegates') withDelegates: boolean) {
+    async allNodes(@Query('withDelegates') withDelegates: boolean = false) {
         this.logger.log(`allNodes {${withDelegates}}`);
         // TODO: validate withDelegate
         try {

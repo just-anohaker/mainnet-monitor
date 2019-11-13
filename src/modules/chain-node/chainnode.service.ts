@@ -2,29 +2,82 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { ChainNodeIOService } from './socketio.service';
 import { ChainNodeEntityService } from './entity.service';
+import { BlockChainService } from './blockchain.service';
+
 import { ChainNode } from './models/node.entity';
 import { Delegate } from './models/delegate.entity';
+import { NodeDto } from './dto/node.dto';
+import { DelegateDto } from './dto/delegate.dto';
+import { BlockChainBlock, EMPTY_BLOCK } from './interfaces/blockchain.interface';
+
+type ChainNodeCache = {
+    height: number;
+    heightTimestamp: number;
+    statusTimestamp: number;
+    updateTimestamp: number;
+}
+
+const NULLABLE_CACHE: ChainNodeCache = {
+    height: -1,
+    heightTimestamp: 0,
+    statusTimestamp: 0,
+    updateTimestamp: 0
+};
 
 @Injectable()
 export class ChainNodeService {
-    private logger: Logger = new Logger('ChainNodeService');
+    private static HEIGHT_SCHEDULER: number = 200;
+    private static STATUS_SCHEDULER: number = 200;
+    private static UPDATE_SCHEDULER: number = 200;
+    private static DELEGATE_SCHEDULER: number = 200;
+
+    private logger: Logger = new Logger('ChainNodeService', true);
     private chainnodes: ChainNode[];
     private delegates: Delegate[];
+    private cache: Map<string, ChainNodeCache>;
+
+    private heightSched: NodeJS.Timeout;
+    private statusSched: NodeJS.Timeout;
+    private updateSched: NodeJS.Timeout;
+    private delegateSched: NodeJS.Timeout;
+    private heightPc: number;
+    private statusPc: number;
+    private updatePc: number;
 
     constructor(
         private readonly ioService: ChainNodeIOService,
-        private readonly entityService: ChainNodeEntityService
+        private readonly entityService: ChainNodeEntityService,
+        private readonly blockchainService: BlockChainService
     ) {
         this.chainnodes = [];
         this.delegates = [];
+        this.cache = new Map();
+        this.heightPc = 0;
+        this.statusPc = 0;
+        this.updatePc = 0;
+
+        this.onHeightScheduler = this.onHeightScheduler.bind(this);
+        this.onStatusScheduler = this.onStatusScheduler.bind(this);
+        this.onUpdateScheduler = this.onUpdateScheduler.bind(this);
+        this.onDelegateScheduler = this.onDelegateScheduler.bind(this);
 
         // Init
+        this.init()
+            .then(() => {
+                this.startSchedulers();
+            })
+            .catch(error => {
+                this.startSchedulers();
+            });
     }
 
-    async addNode(newNode: ChainNode) {
+    async addNode(newNode: ChainNode, logger: boolean = true) {
         if (this.hasNode(newNode)) return;
 
+        logger && this.logger.log(`addNode {${newNode.id.substring(0, 8)}}`)
+
         this.chainnodes.push(newNode);
+        this.cache.set(newNode.id, Object.assign(NULLABLE_CACHE));
         // TODO
     }
 
@@ -34,13 +87,18 @@ export class ChainNodeService {
         const idx = this.chainnodes.findIndex(
             (val: ChainNode) => val.id === delNode.id
         );
-        this.chainnodes.splice(idx, 1);
-
+        const dels = this.chainnodes.splice(idx, 1);
+        this.logger.log(`delNode {${dels[0].id.substring(0, 8)}}`);
+        this.delegates = this.delegates
+            .filter((val: Delegate) => val.id !== delNode.id);
+        this.cache.delete(delNode.id);
         // TODO
     }
 
-    async addDelegate(newDelegate: Delegate) {
+    async addDelegate(newDelegate: Delegate, logger: boolean = true) {
         if (this.hasDelegate(newDelegate)) return;
+
+        logger && this.logger.log(`addDelegate {${newDelegate.publicKey.substring(0, 8)}}`);
 
         this.delegates.push(newDelegate);
         // TODO
@@ -52,10 +110,216 @@ export class ChainNodeService {
         const idx = this.delegates.findIndex(
             (val: Delegate) => val.publicKey === delDelegate.publicKey
         );
-        this.delegates.splice(idx, 1);
+        const dels = this.delegates.splice(idx, 1);
+        this.logger.log(`delDelegate {${dels[0].publicKey.substring(0, 8)}}`);
+        const validDelegates = this.delegates
+            .filter((val: Delegate) => val.id == delDelegate.id);
+        if (validDelegates.length > 0) {
+            const resultDelegate = validDelegates
+                .reduce((pVal: Delegate, cVal: Delegate) => pVal.blockHeight > cVal.blockHeight ? pVal : cVal);
+            const withServer = this.chainnodes.find((val: ChainNode) => val.id === delDelegate.id);
+            if (!withServer) return;
+            if (resultDelegate.blockHeight === -1) {
+                await this.updateNode(withServer, EMPTY_BLOCK);
+            } else {
+                await this.updateNode(withServer, this.toBlock(resultDelegate));
+            }
+        }
     }
 
     ////
+    // scheduler
+    private onHeightScheduler() {
+        clearTimeout(this.heightSched);
+        (async () => {
+            if (this.chainnodes.length > 0) {
+                const now = Date.now();
+                const index = this.heightPc;
+                this.heightPc++;
+                const node = this.chainnodes[index % this.chainnodes.length];
+                const cache = this.cache.get(node.id);
+                if (now - cache.heightTimestamp > 2 * 1000) {
+                    cache.heightTimestamp = now;
+                    const maybeHeight = await this.blockchainService.getHeight(node);
+                    if (maybeHeight != null && cache.height != maybeHeight!) {
+                        if (cache.height > maybeHeight!) {
+                            this.logger.log(`Maybe blockchain start backup or recovery! {${cache.height},${maybeHeight!}}`);
+                            node.lastestHeight = maybeHeight!;
+                            for (let val of this.delegates) {
+                                if (val.id === node.id) {
+                                    val.blockHeight = -1;
+                                }
+                            }
+                        } else {
+                            node.lastestHeight = node.lastestHeight === -1 ? maybeHeight : node.lastestHeight;
+                        }
+                        cache.height = maybeHeight!;
+                        // node.lastestHeight = maybeHeight;
+                        // this.hasNode(node) && await this.entityService.updateNode(node);
+                        // this.hasNode(node) && await this.ioService.emitHeightUpdate(this.toNodeDTO(node, []));
+                    }
+                }
+            }
+            this.heightSched = setTimeout(
+                this.onHeightScheduler,
+                ChainNodeService.HEIGHT_SCHEDULER
+            );
+        })();
+
+    }
+
+    private onStatusScheduler() {
+        clearTimeout(this.statusSched);
+        (async () => {
+            if (this.chainnodes.length) {
+                const now = Date.now();
+                const index = this.statusPc;
+                this.statusPc++;
+                const node = this.chainnodes[index % this.chainnodes.length];
+                const cache = this.cache.get(node.id);
+                if (now - cache.statusTimestamp > 30 * 1000) {
+                    cache.statusTimestamp = now;
+                    const maybeStatus = await this.blockchainService.getStatus(node);
+                    if (maybeStatus != null && node.status != (maybeStatus!.syncing ? 1 : 0)) {
+                        node.status = (maybeStatus!.syncing ? 1 : 0);
+                        this.hasNode(node) && await this.entityService.updateNode(node);
+                        this.hasNode(node) && await this.ioService.emitStatusUpdate(this.toNodeDTO(node, []));
+                    }
+                }
+            }
+            this.statusSched = setTimeout(
+                this.onStatusScheduler,
+                ChainNodeService.STATUS_SCHEDULER
+            );
+        })();
+    }
+
+    private onUpdateScheduler() {
+        clearTimeout(this.updateSched);
+        (async () => {
+            if (this.chainnodes.length > 0) {
+                const now = Date.now();
+                const index = this.updatePc;
+                this.updatePc++;
+                const node = this.chainnodes[index % this.chainnodes.length];
+                const cache = this.cache.get(node.id);
+                if (
+                    node.lastestHeight !== -1
+                    && now - cache.updateTimestamp > 2 * 1000
+                    && node.lastestHeight <= cache.height
+                ) {
+                    cache.updateTimestamp = now;
+                    const maybeBlock = await this.blockchainService.getBlock(node, node.lastestHeight + 1);
+                    if (maybeBlock != null) {
+                        node.lastestHeight = maybeBlock!.height;
+                        this.hasNode(node) && await this.entityService.updateNode(node);
+                        this.hasNode(node) && await this.ioService.emitHeightUpdate(this.toNodeDTO(node, []));
+
+                        for (let val of this.delegates) {
+                            if (val.id === node.id && val.publicKey === maybeBlock!.generatorPublicKey) {
+                                await this.updateNode(node, maybeBlock);
+                                await this.updateDelegate(val, maybeBlock);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            this.updateSched = setTimeout(
+                this.onUpdateScheduler,
+                ChainNodeService.UPDATE_SCHEDULER
+            );
+        })();
+    }
+
+    private onDelegateScheduler() {
+        clearTimeout(this.delegateSched);
+
+        (async () => {
+            const uninitDelegate = this.delegates.find(
+                (val: Delegate) => val.blockHeight === -1
+            );
+            if (uninitDelegate != null) {
+                // founded
+                const withServer = this.chainnodes.find(
+                    (val: ChainNode) => val.id === uninitDelegate.id
+                );
+                const maybeBlock = await this.blockchainService.getLastGeneratedBock(
+                    withServer,
+                    uninitDelegate.publicKey
+                );
+                if (maybeBlock != null && uninitDelegate.blockHeight !== -1) {
+                    await this.updateNode(withServer, maybeBlock);
+                    await this.updateDelegate(uninitDelegate, maybeBlock);
+                }
+            }
+            this.delegateSched = setTimeout(
+                this.onDelegateScheduler,
+                ChainNodeService.DELEGATE_SCHEDULER
+            );
+        })();
+    }
+
+    ////
+    private async init() {
+        const allNodes = await this.entityService.getAllNodes();
+        this.logger.log(`init allNodes: ${JSON.stringify(allNodes, null, 2)}`);
+        for (const n of allNodes) {
+            n.lastestHeight = -1;
+            await this.addNode(n, false);
+        }
+        const allDelegates = await this.entityService.getAllDelegates();
+        this.logger.log(`init allDelegates: ${JSON.stringify(allDelegates, null, 2)}`);
+        for (const d of allDelegates) {
+            d.blockHeight = -1;
+            await this.addDelegate(d);
+        }
+    }
+
+    private startSchedulers() {
+        this.heightSched = setTimeout(
+            this.onHeightScheduler,
+            ChainNodeService.HEIGHT_SCHEDULER
+        );
+        this.statusSched = setTimeout(
+            this.onStatusScheduler,
+            ChainNodeService.STATUS_SCHEDULER
+        );
+        this.updateSched = setTimeout(
+            this.onUpdateScheduler,
+            ChainNodeService.UPDATE_SCHEDULER
+        );
+        this.delegateSched = setTimeout(
+            this.onDelegateScheduler,
+            ChainNodeService.DELEGATE_SCHEDULER
+        );
+    }
+
+    private async updateNode(withServer: ChainNode, block: BlockChainBlock) {
+        if (block === EMPTY_BLOCK || withServer.blockHeight < block.height) {
+            withServer.blockHeight = block.height;
+            withServer.blockId = block.id;
+            withServer.blockTimestamp = block.timestamp;
+            withServer.blockDate = this.toBlockDate(block.timestamp);
+            withServer.generatorPublicKey = block.generatorPublicKey;
+            withServer.generatorAddress = block.generatorId;
+
+            this.hasNode(withServer) && await this.entityService.updateNode(withServer);
+            this.hasNode(withServer) && await this.ioService.emitNodeUpdate(this.toNodeDTO(withServer, []));
+        }
+    }
+
+    private async updateDelegate(delegate: Delegate, block: BlockChainBlock) {
+        delegate.address = block.generatorId;
+        delegate.blockId = block.id;
+        delegate.blockHeight = block.height;
+        delegate.blockTimestamp = block.timestamp;
+        delegate.blockDate = this.toBlockDate(block.timestamp);
+
+        this.hasDelegate(delegate) && await this.entityService.updateDelegate(delegate);
+        this.hasDelegate(delegate) && await this.ioService.emitDelegateUpdate(this.toDelegateDTO(delegate));
+    }
+
     private hasNode(data: ChainNode): boolean {
         return this.chainnodes.findIndex(
             (val: ChainNode) => val.id === data.id
@@ -68,333 +332,35 @@ export class ChainNodeService {
         ) != -1;
     }
 
-    // async addChainNode(node: NodeHeader) {
-    //     const exists = await this.chainnodeRepository.count({
-    //         ip: node.ip,
-    //         port: node.port
-    //     });
-    //     if (exists > 0) {
-    //         throw new Error("chainnode is already exists!");
-    //     }
-
-    //     const nodeHeader: NodeHeader = {
-    //         ip: node.ip,
-    //         port: node.port,
-    //         name: node.name,
-    //         type: node.type
-    //     }
-
-    //     const nodeElem = new ChainNode();
-    //     nodeElem.ip = nodeHeader.ip;
-    //     nodeElem.port = nodeHeader.port;
-    //     nodeElem.type = nodeHeader.type;
-    //     nodeElem.name = nodeHeader.name;
-    //     nodeElem.status = -1;
-    //     nodeElem.id = uuid.v1();
-
-    //     await this.chainnodeRepository.save(nodeElem);
-
-    //     const newMonitor = new ChainNodeStateMonitor(nodeElem.id, nodeHeader);
-    //     newMonitor.attackObserver(this);
-    //     this.subjects.set(nodeElem.id, newMonitor);
-    //     console.log('newMonitor:', JSON.stringify({ id: nodeElem.id, node }));
-
-    //     this.server.emit(EVT_NODE_ADDED, nodeElem.id);
-
-    //     return nodeElem.id;
-    // }
-
-    // async getChainNode(id: string) {
-    //     const findNode = await this.chainnodeRepository.findOne({ id });
-    //     if (findNode === undefined) {
-    //         throw new Error('no chainnode exists with id(' + id + ')');
-    //     }
-
-    //     return this.buildNodeInfo(findNode, []);
-    // }
-
-    // async getChainNodeWithDelegates(id: string) {
-    //     const findNode = await this.chainnodeRepository.findOne({ id });
-    //     if (findNode === undefined) {
-    //         throw new Error('no chainnode exists with id(' + id + ')');
-    //     }
-
-    //     const findDelegates = await this.delegateRepository.find({ nodeId: id }) || [];
-    //     return this.buildNodeInfo(findNode, findDelegates);
-    // }
-
-    // async delChainNode(id: string) {
-    //     const findNode = await this.chainnodeRepository.findOne({ id });
-    //     if (findNode === undefined) {
-    //         throw new Error('no chainnode exists with id(' + id + ')');
-    //     }
-    //     await this.chainnodeRepository.delete(findNode);
-
-    //     const findDelegates = await this.delegateRepository.find({ nodeId: id }) || [];
-    //     const delDelegates: string[] = [];
-    //     for (const delegate of findDelegates) {
-    //         await this.delegateRepository.delete(delegate);
-    //         delDelegates.push(delegate.publicKey);
-    //     }
-
-    //     if (this.subjects.has(findNode.id)) {
-    //         this.subjects.get(findNode.id).detachObserver(this);
-    //         this.subjects.get(findNode.id).destory();
-    //         this.subjects.delete(findNode.id);
-    //     }
-
-    //     this.server.emit(EVT_NODE_REMOVED, findNode.id);
-    //     for (const delegate of delDelegates) {
-    //         this.server.emit(EVT_DELEGATE_REMOVED, delegate);
-    //     }
-
-    //     return findNode.id;
-    // }
-
-    // async addDelegate(delegateRelatived: DelegateHeader & Idable) {
-    //     const findNode = await this.chainnodeRepository.findOne({ id: delegateRelatived.id });
-    //     if (findNode === undefined) {
-    //         throw new Error('chainnode with(' + delegateRelatived.id + ') is not exists!');
-    //     }
-    //     const count = await this.delegateRepository.count({ publicKey: delegateRelatived.publicKey });
-    //     if (count > 0) {
-    //         throw new Error('delegate is already exists!');
-    //     }
-
-    //     const delegateElem = new Delegate();
-    //     delegateElem.publicKey = delegateRelatived.publicKey;
-    //     delegateElem.nodeId = delegateRelatived.id;
-    //     delegateElem.name = delegateRelatived.name;
-
-    //     await this.delegateRepository.save(delegateElem);
-
-    //     if (this.subjects.has(delegateElem.nodeId)) {
-    //         this.subjects.get(delegateElem.nodeId).addDelegate(delegateElem.publicKey);
-    //     }
-
-    //     this.server.emit(EVT_DELEGATE_ADDED, delegateElem.publicKey);
-
-    //     return delegateElem.publicKey;
-    // }
-
-    // async getDelegate(publicKey: string) {
-    //     const findDelegate = await this.delegateRepository.findOne({ publicKey });
-    //     if (findDelegate === undefined) {
-    //         throw new Error('no delegate exists with address(' + publicKey + ')');
-    //     }
-
-    //     return this.buildDelegateInfo(findDelegate);
-    // }
-
-    // async delDelegate(publicKey: string) {
-    //     const findDelegate = await this.delegateRepository.findOne({ publicKey });
-    //     if (findDelegate === undefined) {
-    //         throw new Error('no delegate exists with address(' + publicKey + ')');
-    //     }
-
-    //     await this.delegateRepository.delete(findDelegate);
-
-    //     if (this.subjects.has(findDelegate.nodeId)) {
-    //         this.subjects.get(findDelegate.nodeId).removeDelegate(findDelegate.publicKey);
-    //     }
-
-    //     await this.updateNode(findDelegate.nodeId);
-
-    //     this.server.emit(EVT_DELEGATE_REMOVED, findDelegate.publicKey);
-
-    //     return findDelegate.publicKey;
-    // }
-
-    // async allNodes() {
-    //     const chainnodes = await this.chainnodeRepository.find();
-
-    //     const result: NodeDetail[] = [];
-    //     for (const val of chainnodes) {
-    //         result.push(this.buildNodeInfo(val, []));
-    //     }
-
-    //     return result;
-    // }
-
-    // async allNodeDetails() {
-    //     const chainnodes = await this.chainnodeRepository.find();
-
-    //     const result: NodeDetail[] = [];
-    //     for (const val of chainnodes) {
-    //         const relativedDelegates = await this.delegateRepository.find({ nodeId: val.id });
-    //         result.push(this.buildNodeInfo(val, relativedDelegates));
-    //     }
-    //     return result;
-    // }
-
-    // async allDelegates() {
-    //     const delegates = await this.delegateRepository.find();
-
-    //     const result: DelegateDetail[] = [];
-    //     for (const val of delegates) {
-    //         result.push(this.buildDelegateInfo(val));
-    //     }
-    //     return result;
-    // }
-
-    // // ------------------------------------------------------------------------
-    // // override
-    // async onDelegateChanged(nodeId: string, delegatePublicKey: string, blockHeader: BlockHeader) {
-    //     // const msg = `delegateChange(${nodeId}, ${delegatePublicKey}, ${blockHeader.id}, ${blockHeader.height}, ${this.showableDate(this.translateTimestamp(blockHeader.timestamp))})`;
-    //     // console.log(msg);
-
-    //     this.logger.log(`onDelegateChanged ${nodeId} - ${JSON.stringify(blockHeader, null, 2)}`);
-
-    //     await this.updateDelegate(nodeId, delegatePublicKey, blockHeader);
-
-    //     await this.updateNode(nodeId, blockHeader);
-    // }
-
-    // async onNodeChanged(nodeId: string, nodeHeader: NodeHeader, blockHeader: BlockHeader) {
-    //     // const msg = `nodeChange(${nodeId}, ${blockHeader.id}, ${blockHeader.height}, ${this.showableDate(this.translateTimestamp(blockHeader.timestamp))})`;
-    //     // console.log(msg);
-    //     this.logger.log(`onNodeChanged ${nodeId} - ${JSON.stringify(blockHeader, null, 2)}`);
-    //     await this.updateNodeLastest(nodeId, blockHeader);
-    // }
-
-    // async onNodeStatusChanged(nodeId: string, status: number) {
-    //     this.logger.log(`onNodeStatusChanged ${nodeId} - ${status}`);
-    //     const findNode = await this.chainnodeRepository.findOne({ id: nodeId });
-    //     // console.log('onNodeStatusChanged:', nodeId, status, JSON.stringify(findNode));
-    //     if (findNode === undefined) return;
-    //     if (findNode.status !== status) {
-    //         findNode.status = status;
-    //         await this.chainnodeRepository.save(findNode);
-
-    //         // this.server.emit(EVT_STATUS_UPDATE, status);
-    //     }
-    // }
-
-    // // ------------------------------------------------------------------------
-    // private async updateDelegate(nodeId: string, delegatePublicKey: string, block: BlockHeader) {
-    //     const delegate = await this.delegateRepository.findOne({
-    //         nodeId: nodeId,
-    //         publicKey: delegatePublicKey
-    //     });
-    //     if (delegate !== undefined && delegate.blockHeight != block.height) {
-    //         delegate.address = block.generatorId;
-    //         delegate.blockId = block.id;
-    //         delegate.blockHeight = block.height;
-    //         delegate.blockTimestamp = block.timestamp;
-    //         delegate.blockDate = this.translateTimestamp(block.timestamp);
-
-    //         this.delegateRepository.save(delegate);
-
-    //         // TODO
-    //         // this.server.emit(EVT_DELEGATE_UPDATE, this.buildDelegateInfo(delegate));
-    //     }
-    // }
-
-    // private async updateNodeLastest(nodeId: string, block: BlockHeader) {
-    //     const chainNode = await this.chainnodeRepository.findOne({ id: nodeId });
-    //     if (chainNode !== undefined && chainNode.lastestHeight != block.height) {
-    //         // chainNode.status = 0;
-    //         chainNode.lastestHeight = block.height;
-
-    //         this.chainnodeRepository.save(chainNode);
-
-    //         // TODO
-    //         // this.server.emit(EVT_HEIGHT_UPDATE, this.buildNodeInfo(chainNode, []));
-
-    //         await this.ioService.emitHeightUpdate(this.buildNodeInfo(chainNode, []));
-    //     }
-    // }
-
-    // private async updateNode(nodeId: string, block?: BlockHeader) {
-    //     const chainNode = await this.chainnodeRepository.findOne({ id: nodeId });
-    //     if (chainNode !== undefined) {
-    //         // chainNode.status = 0;
-
-    //         const delegates = await this.delegateRepository.find({ nodeId });
-    //         const tmpDelegateNodes: BlockHeader[] = [];
-    //         if (delegates.length > 0) {
-    //             block && tmpDelegateNodes.push(block);
-    //             for (const val of delegates) {
-    //                 tmpDelegateNodes.push({
-    //                     height: val.blockHeight,
-    //                     id: val.blockId,
-    //                     generatorPublicKey: val.publicKey,
-    //                     generatorId: val.address,
-    //                     timestamp: val.blockTimestamp,
-    //                 });
-    //             }
-    //         }
-    //         tmpDelegateNodes.sort((a: BlockHeader, b: BlockHeader) => b.height - a.height);
-    //         const newBlock = tmpDelegateNodes.length !== 0 ? tmpDelegateNodes[0] : NullableBlockHeader;
-    //         if (chainNode.blockHeight != newBlock.height) {
-    //             chainNode.blockHeight = newBlock.height;
-    //             chainNode.blockId = newBlock.id;
-    //             chainNode.generatorPublicKey = newBlock.generatorPublicKey;
-    //             chainNode.generatorAddress = newBlock.generatorId;
-    //             chainNode.blockTimestamp = newBlock.timestamp;
-    //             chainNode.blockDate = newBlock.timestamp == null ? null : this.translateTimestamp(newBlock.timestamp);
-
-    //             this.chainnodeRepository.save(chainNode);
-
-    //             // TODO
-    //             // this.server.emit(EVT_NODE_UPDATE, this.buildNodeInfo(chainNode, []));
-    //         }
-    //     }
-    // }
-
-    // private buildNodeInfo(node: ChainNode, delegates: Delegate[]): NodeDetail {
-    //     const result: Partial<NodeDetail> = {};
-    //     result.id = node.id;
-    //     result.ip = node.ip;
-    //     result.port = node.port;
-    //     result.name = node.name;
-    //     result.type = node.type;
-    //     result.status = node.status;
-
-    //     result.lastestHeight = node.lastestHeight;
-
-    //     result.blockId = node.blockId;
-    //     result.blockHeight = node.blockHeight;
-    //     result.blockTimestamp = node.blockTimestamp;
-    //     result.blockDate = node.blockDate;
-
-    //     result.generatorAddress = node.generatorAddress;
-    //     result.generatorPublicKey = node.generatorPublicKey;
-
-    //     result.delegates = [];
-    //     for (const value of delegates) {
-    //         result.delegates.push(this.buildDelegateInfo(value));
-    //     }
-
-    //     return result as NodeDetail;
-    // }
-
-    // private buildDelegateInfo(delegate: Delegate): DelegateDetail {
-    //     const result: Partial<DelegateDetail> = {};
-    //     result.name = delegate.name;
-    //     result.publicKey = delegate.publicKey;
-    //     result.id = delegate.nodeId;
-
-    //     result.address = delegate.address;
-
-    //     result.blockId = delegate.blockId;
-    //     result.blockHeight = delegate.blockHeight;
-    //     result.blockTimestamp = delegate.blockTimestamp;
-    //     result.blockDate = delegate.blockDate;
-
-    //     return result as DelegateDetail;
-    // }
-
-    // private translateTimestamp(timestamp: number): number {
-    //     const startDate = new Date(Date.UTC(2018, 9, 12, 12, 0, 0, 0));
-    //     const newTime = startDate.getTime() + timestamp * 1000;
-
-    //     return newTime;
-    // }
-
-    // private showableDate(timestamp: number) {
-    //     const date = new Date();
-    //     date.setTime(timestamp);
-    //     return date.toLocaleDateString();
-    // }
+    private toNodeDTO(node: ChainNode, delegates: Delegate[]): NodeDto {
+        const result: NodeDto = Object.assign(node);
+        result.delegates = [];
+        for (const val of delegates) {
+            result.delegates.push(val);
+        }
+        return result;
+    }
+
+    private toDelegateDTO(delegate: Delegate): DelegateDto {
+        const result: DelegateDto = Object.assign(delegate);
+        return result;
+    }
+
+    private toBlock(delegate: Delegate): BlockChainBlock {
+        const result: BlockChainBlock = {
+            id: delegate.blockId,
+            height: delegate.blockHeight,
+            timestamp: delegate.blockTimestamp,
+            generatorPublicKey: delegate.publicKey,
+            generatorId: delegate.address
+        };
+        return result;
+    }
+
+    private toBlockDate(timestamp: number) {
+        const startDate = new Date(Date.UTC(2018, 9, 12, 12, 0, 0, 0));
+        const newTime = startDate.getTime() + timestamp * 1000;
+
+        return newTime;
+    }
 }

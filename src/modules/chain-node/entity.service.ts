@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import uuid from 'uuid';
@@ -10,6 +10,8 @@ import { CreateDelegateDto, DelDelegateDto } from './dto/delegate.dto';
 
 @Injectable()
 export class ChainNodeEntityService {
+    private logger: Logger = new Logger('ChainNodeEntityService', true);
+
     constructor(
         @InjectRepository(ChainNode)
         private readonly chainnodeRepo: Repository<ChainNode>,
@@ -17,7 +19,7 @@ export class ChainNodeEntityService {
         private readonly delegateRepo: Repository<Delegate>
     ) { }
 
-    async addNode(data: CreateNodeDto): Promise<ChainNode> {
+    async createNode(data: CreateNodeDto): Promise<ChainNode> {
         const exists = await this.chainnodeRepo.count({
             ip: data.ip,
             port: data.port
@@ -36,6 +38,8 @@ export class ChainNodeEntityService {
 
         await this.chainnodeRepo.save(newNode);
 
+        this.logger.log(`addNode {${newNode.id.substring(0, 8)}, ${newNode.ip}, ${newNode.port}}`);
+
         return newNode;
     }
 
@@ -53,12 +57,13 @@ export class ChainNodeEntityService {
     }
 
     async delNode(data: DelNodeDto): Promise<ChainNode> {
-        const dNode = await this.chainnodeRepo.delete({ id: data.id });
-        if (dNode.affected <= 0) {
+        const dResult = await this.chainnodeRepo.delete({ id: data.id });
+        if (dResult.affected <= 0) {
             throw new Error(`no chainnode(${data.id}) exists!`);
         }
-        // TODO
-        return dNode.raw as ChainNode;
+        const dNode = dResult.raw as ChainNode;
+        this.logger.log(`delNode {${dNode.id.substring(0, 8)}}`);
+        return dNode;
     }
 
     async createDelegate(data: CreateDelegateDto): Promise<Delegate> {
@@ -73,6 +78,8 @@ export class ChainNodeEntityService {
         newDelegate.name = data.name;
 
         await this.delegateRepo.save(newDelegate);
+
+        this.logger.log(`createDelegate {${newDelegate.id.substring(0, 8)}, ${newDelegate.publicKey}}`);
 
         return newDelegate;
     }
@@ -97,28 +104,38 @@ export class ChainNodeEntityService {
     }
 
     async delDelegate(data: DelDelegateDto): Promise<Delegate> {
-        const dDelegate = await this.delegateRepo.delete({ publicKey: data.publicKey });
-        if (dDelegate.affected <= 0) {
+        const dResult = await this.delegateRepo.delete({ publicKey: data.publicKey });
+        if (dResult.affected <= 0) {
             throw new Error(`delegate(${data.publicKey}) not exists!`);
         }
 
-        return dDelegate.raw as Delegate;
+        const dDelegate = dResult.raw as Delegate;
+        this.logger.log(`delDelegate {${dDelegate.id.substring(0, 8)}, ${dDelegate.publicKey.substring(0, 8)}}`)
+
+        return dDelegate;
     }
 
     async delDelegatesByNodeId(data: DelDelegateDto): Promise<Delegate[] | Delegate> {
-        const dDelegates = await this.delegateRepo.delete({ id: data.nodeId });
-        if (dDelegates.affected <= 0) {
+        const dResult = await this.delegateRepo.delete({ id: data.nodeId });
+        if (dResult.affected <= 0) {
             throw new Error(`chainnode(${data.nodeId}) do not has delegate!`);
         }
 
-        return dDelegates.raw || [];
+        const dDelegates = (dResult.raw as Delegate[]) || [];
+        this.logger.log(`delDelegatesByNodeId {${data.nodeId.substring(0, 8)}, count(${dDelegates.length})}`);
+
+        return dDelegates;
     }
 
     async updateNode(newData: ChainNode) {
+        this.logger.log(`updateNode {${newData.id.substring(0, 8)}, ${newData.lastestHeight}, ${newData.blockHeight}}`);
+
         await this.chainnodeRepo.save(newData);
     }
 
     async updateDelegate(newData: Delegate) {
+        this.logger.log(`updateDelegate {${newData.publicKey.substring(0, 8)}, ${newData.blockHeight}}`);
+
         await this.delegateRepo.save(newData);
     }
 }

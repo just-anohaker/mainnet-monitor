@@ -9,3 +9,13 @@ export class DelDelegateDto {
     nodeId: string;
 }
 
+export class DelegateDto {
+    id: string;
+    name: string;
+    publicKey: string;
+    address: string;
+    blockId: string;
+    blockHeight: number;
+    blockTimestamp: number;
+    blockDate: number;
+}
