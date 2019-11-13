@@ -6,7 +6,7 @@ export class Delegate {
     publicKey: string;
 
     @Column()
-    nodeId: string;
+    id: string;
 
     @Column()
     name: string;
