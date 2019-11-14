@@ -20,5 +20,5 @@ export const EMPTY_BLOCK: BlockChainBlock = {
 }
 
 export interface BlockChainStatus {
-    readonly syncing: boolean;
+    readonly status: number;
 }

@@ -12,6 +12,8 @@ export function buildResponseFailure(error: string) {
     };
 }
 
-export interface JsonObject {
-    [key: string]: any;
+export async function delay(ms: number) {
+    return new Promise((resolve) => {
+        setTimeout(() => resolve(), ms);
+    });
 }

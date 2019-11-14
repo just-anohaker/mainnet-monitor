@@ -34,7 +34,8 @@ export class ChainNodeEntityService {
         newNode.port = data.port;
         newNode.name = data.name;
         newNode.type = data.type;
-        newNode.status = -1;
+        newNode.status = 0;
+        newNode.lastestHeight = -1;
 
         await this.chainnodeRepo.save(newNode);
 
@@ -57,17 +58,22 @@ export class ChainNodeEntityService {
     }
 
     async delNode(data: DelNodeDto): Promise<ChainNode> {
-        const dResult = await this.chainnodeRepo.delete({ id: data.id });
-        if (dResult.affected <= 0) {
+        const findNode = await this.chainnodeRepo.findOne({ id: data.id });
+        if (findNode == null) {
             throw new Error(`no chainnode(${data.id}) exists!`);
         }
-        const dNode = dResult.raw as ChainNode;
-        this.logger.log(`delNode {${dNode.id.substring(0, 8)}}`);
-        return dNode;
+        await this.chainnodeRepo.delete(findNode);
+        await this.delegateRepo.delete({ id: findNode.id });
+        this.logger.log(`delNode {${data.id.substring(0, 8)}}`);
+        return findNode;
     }
 
     async createDelegate(data: CreateDelegateDto): Promise<Delegate> {
-        const count = await this.delegateRepo.count({ id: data.id, publicKey: data.publicKey });
+        const nodeCount = await this.chainnodeRepo.count({ id: data.id });
+        if (nodeCount <= 0) {
+            throw new Error(`create delegate with no chainnode(${data.id})`);
+        }
+        const count = await this.delegateRepo.count({ publicKey: data.publicKey });
         if (count > 0) {
             throw new Error(`delegate(${data.publicKey}) exists!`);
         }
@@ -76,6 +82,7 @@ export class ChainNodeEntityService {
         newDelegate.id = data.id;
         newDelegate.publicKey = data.publicKey;
         newDelegate.name = data.name;
+        newDelegate.blockHeight = -1;
 
         await this.delegateRepo.save(newDelegate);
 
@@ -104,27 +111,27 @@ export class ChainNodeEntityService {
     }
 
     async delDelegate(data: DelDelegateDto): Promise<Delegate> {
-        const dResult = await this.delegateRepo.delete({ publicKey: data.publicKey });
-        if (dResult.affected <= 0) {
+        const findDelegate = await this.delegateRepo.findOne({ publicKey: data.publicKey });
+        if (findDelegate == null) {
             throw new Error(`delegate(${data.publicKey}) not exists!`);
         }
+        await this.delegateRepo.delete(findDelegate);
+        this.logger.log(`delDelegate {${findDelegate.id.substring(0, 8)}, ${findDelegate.publicKey.substring(0, 8)}}`)
 
-        const dDelegate = dResult.raw as Delegate;
-        this.logger.log(`delDelegate {${dDelegate.id.substring(0, 8)}, ${dDelegate.publicKey.substring(0, 8)}}`)
-
-        return dDelegate;
+        return findDelegate;
     }
 
     async delDelegatesByNodeId(data: DelDelegateDto): Promise<Delegate[] | Delegate> {
-        const dResult = await this.delegateRepo.delete({ id: data.nodeId });
-        if (dResult.affected <= 0) {
+        const findDelegates = await this.delegateRepo.find({ id: data.nodeId });
+        if (findDelegates.length <= 0) {
             throw new Error(`chainnode(${data.nodeId}) do not has delegate!`);
         }
+        for (const dDelegate of findDelegates) {
+            await this.delegateRepo.delete(dDelegate);
+        }
+        this.logger.log(`delDelegatesByNodeId {${data.nodeId.substring(0, 8)}, count(${findDelegates.length})}`);
 
-        const dDelegates = (dResult.raw as Delegate[]) || [];
-        this.logger.log(`delDelegatesByNodeId {${data.nodeId.substring(0, 8)}, count(${dDelegates.length})}`);
-
-        return dDelegates;
+        return findDelegates;
     }
 
     async updateNode(newData: ChainNode) {
