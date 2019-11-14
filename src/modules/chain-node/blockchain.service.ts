@@ -14,6 +14,8 @@ import { delay } from '../../common';
 
 @Injectable()
 export class BlockChainService {
+    private static MAX_TIMEOUT: number = 30 * 1000;
+
     async getHeight(server: BlockChainServer): Promise<Maybe<number>> {
         const url = this.buildBaseURL(server) + '/api/blocks/getHeight';
 
@@ -34,7 +36,11 @@ export class BlockChainService {
         server: BlockChainServer, height: number, count: number
     ) {
         const url = this.buildBaseURL(server) + '/api/blocks';
-        const maybeBlocks = await this.asyncGet(url, { offset: height, limit: count }, 30 * 1000);
+        const maybeBlocks = await this.asyncGet(
+            url,
+            { offset: height, limit: count },
+            BlockChainService.MAX_TIMEOUT
+        );
         return maybeBlocks ? this.buildBlockChainBlocks(maybeBlocks.blocks) : undefined;
     }
 
@@ -68,7 +74,7 @@ export class BlockChainService {
                 limit: 1,
                 orderBy: 'height:desc'
             },
-            30 * 1000
+            BlockChainService.MAX_TIMEOUT
         );
         if (maybeGeneratedBlocks == null) return undefined;
         const blocks = maybeGeneratedBlocks.blocks;
