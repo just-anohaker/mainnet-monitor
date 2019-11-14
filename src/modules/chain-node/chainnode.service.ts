@@ -235,8 +235,13 @@ export class ChainNodeService {
                 ) {
                     cache.updateTimestamp = now;
                     const limit = cache.height - node.lastestHeight;
-                    const maybeBlocks = await this.blockchainService.getBlocks(node, node.lastestHeight, limit);
-                    // console.log(`getBlocks (${node.nodeId.substring(0, 8)}, ${node.lastestHeight}, ${limit})`, maybeBlocks);
+                    let maybeBlocks: BlockChainBlock[] = null;
+                    if (limit === 1) {
+                        const maybeBlock = await this.blockchainService.getBlock(node, node.lastestHeight + 1);
+                        maybeBlocks = maybeBlock ? [maybeBlock] : maybeBlocks;
+                    } else {
+                        maybeBlocks = await this.blockchainService.getBlocks(node, node.lastestHeight, limit);
+                    }
                     let lastUpdateNode: ChainNode = null;
                     let lastUpdateDelegate: Delegate = null;
                     if (maybeBlocks != null) {
@@ -262,8 +267,8 @@ export class ChainNodeService {
                                 && await this.ioService.emitNodeUpdate(this.toNodeDTO(lastUpdateNode, []));
                             lastUpdateDelegate
                                 && await this.ioService.emitDelegateUpdate(this.toDelegateDTO(lastUpdateDelegate));
-                            let msg = 'onUpdateScheduler {';
-                            msg += `${node.lastestHeight}`;
+                            let msg = `onUpdateScheduler {${node.id.substring(0, 8)}`;
+                            msg += `, ${node.lastestHeight}`;
                             msg += lastUpdateNode ? `, ${lastUpdateNode.blockHeight}, ${lastUpdateDelegate.address}` : "";
                             msg += '}';
                             this.logger.log(msg);
