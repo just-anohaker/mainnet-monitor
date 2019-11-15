@@ -362,7 +362,7 @@ export class ChainNodeService {
     }
 
     private async updateNode(withServer: ChainNode, block: BlockChainBlock, force: boolean = false) {
-        if (force && block === EMPTY_BLOCK || withServer.blockHeight < block.height) {
+        if (force || block === EMPTY_BLOCK || withServer.blockHeight < block.height) {
             withServer.blockHeight = block.height;
             withServer.blockId = block.id;
             withServer.blockTimestamp = block.timestamp;
