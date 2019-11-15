@@ -13,15 +13,21 @@ import { BlockChainBlock, EMPTY_BLOCK } from './interfaces/blockchain.interface'
 type ChainNodeCache = {
     height: number;
     heightTimestamp: number;
+    heightRequesting: boolean;
     statusTimestamp: number;
+    statusRequesting: boolean;
     updateTimestamp: number;
+    updateRequesting: boolean;
 }
 
 const NULLABLE_CACHE: ChainNodeCache = {
     height: -1,
     heightTimestamp: 0,
+    heightRequesting: false,
     statusTimestamp: 0,
-    updateTimestamp: 0
+    statusRequesting: false,
+    updateTimestamp: 0,
+    updateRequesting: false,
 };
 
 @Injectable()
@@ -173,8 +179,10 @@ export class ChainNodeService {
                 this.heightPc++;
                 const node = this.chainnodes[index % this.chainnodes.length];
                 const cache = this.cache.get(node.id);
-                if (now - cache.heightTimestamp > ChainNodeService.HEIGHT_DIFF) {
+                if (!cache.heightRequesting
+                    && now - cache.heightTimestamp > ChainNodeService.HEIGHT_DIFF) {
                     cache.heightTimestamp = now;
+                    cache.heightRequesting = true;
                     const maybeHeight = await this.blockchainService.getHeight(node);
                     if (maybeHeight != null && cache.height != maybeHeight!) {
                         if (cache.height > maybeHeight!) {
@@ -191,13 +199,15 @@ export class ChainNodeService {
                         cache.height = maybeHeight!;
                         this.logger.log(`onHeightScheduler {${node.id.substring(0, 8)}, ${maybeHeight!}}`);
                     }
+                    cache.heightRequesting = false;
                 }
             }
-            this.heightSched = setTimeout(
-                this.onHeightScheduler,
-                ChainNodeService.HEIGHT_SCHEDULER
-            );
+
         })();
+        this.heightSched = setTimeout(
+            this.onHeightScheduler,
+            ChainNodeService.HEIGHT_SCHEDULER
+        );
     }
 
     private onStatusScheduler() {
@@ -209,8 +219,10 @@ export class ChainNodeService {
                 this.statusPc++;
                 const node = this.chainnodes[index % this.chainnodes.length];
                 const cache = this.cache.get(node.id);
-                if (now - cache.statusTimestamp > ChainNodeService.STATUS_DIFF) {
+                if (!cache.statusRequesting
+                    && now - cache.statusTimestamp > ChainNodeService.STATUS_DIFF) {
                     cache.statusTimestamp = now;
+                    cache.statusRequesting = true;
                     const newStatus = await this.blockchainService.getStatus(node);
                     if (node.status != newStatus.status) {
                         node.status = newStatus.status;
@@ -218,13 +230,15 @@ export class ChainNodeService {
                         this.hasNode(node) && await this.ioService.emitStatusUpdate(this.toNodeDTO(node, []));
                         this.logger.log(`onStatusScheduler {${node.id.substring(0, 8)}, ${newStatus.status}}`);
                     }
+                    cache.statusRequesting = false;
                 }
             }
-            this.statusSched = setTimeout(
-                this.onStatusScheduler,
-                ChainNodeService.STATUS_SCHEDULER
-            );
+
         })();
+        this.statusSched = setTimeout(
+            this.onStatusScheduler,
+            ChainNodeService.STATUS_SCHEDULER
+        );
     }
 
     private onUpdateScheduler() {
@@ -237,11 +251,13 @@ export class ChainNodeService {
                 const node = this.chainnodes[index % this.chainnodes.length];
                 const cache = this.cache.get(node.id);
                 if (
-                    node.lastestHeight !== -1
+                    !cache.updateRequesting
+                    && node.lastestHeight !== -1
                     && now - cache.updateTimestamp > ChainNodeService.UPDATE_DIFF
                     && node.lastestHeight < cache.height
                 ) {
                     cache.updateTimestamp = now;
+                    cache.updateRequesting = true;
                     const limit = cache.height - node.lastestHeight;
                     let maybeBlocks: BlockChainBlock[] = null;
                     if (limit === 1) {
@@ -283,13 +299,14 @@ export class ChainNodeService {
 
                         }
                     }
+                    cache.updateRequesting = false;
                 }
             }
-            this.updateSched = setTimeout(
-                this.onUpdateScheduler,
-                ChainNodeService.UPDATE_SCHEDULER
-            );
         })();
+        this.updateSched = setTimeout(
+            this.onUpdateScheduler,
+            ChainNodeService.UPDATE_SCHEDULER
+        );
     }
 
     private onDelegateScheduler() {
