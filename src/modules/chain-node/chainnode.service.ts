@@ -147,7 +147,7 @@ export class ChainNodeService {
         }
 
         const validDelegates = this.delegates
-            .filter((val: Delegate) => val.id == delDelegate.id);
+            .filter((val: Delegate) => val.id == withServer.id);
         if (validDelegates.length > 0) {
             const resultDelegate = validDelegates
                 .reduce((pVal: Delegate, cVal: Delegate) => pVal.blockHeight > cVal.blockHeight ? pVal : cVal);
@@ -159,6 +159,7 @@ export class ChainNodeService {
         } else {
             await this.updateNode(withServer, EMPTY_BLOCK, true);
         }
+        this.ioService.emitNodeUpdate(this.toNodeDTO(withServer, []));
     }
 
     ////
