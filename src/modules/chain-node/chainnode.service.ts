@@ -134,10 +134,17 @@ export class ChainNodeService {
         const idx = this.delegates.findIndex(
             (val: Delegate) => val.publicKey === delDelegate.publicKey
         );
-        const dels = this.delegates.splice(idx, 1);
-        this.logger.log(`delDelegate {${dels[0].publicKey.substring(0, 8)}}`);
-        const withServer = this.chainnodes.find((val: ChainNode) => val.id === delDelegate.id);
-        if (withServer == null) return;
+        const [del] = this.delegates.splice(idx, 1);
+        this.logger.log(`delDelegate {${del.id.substring(0, 8)}, ${del.publicKey.substring(0, 8)}}`);
+        const withServer = this.chainnodes.find((val: ChainNode) => val.id === del.id);
+        if (withServer == null) {
+            const ids: string[] = [];
+            for (let chainnode of this.chainnodes) {
+                ids.push(chainnode.id);
+            }
+            this.logger.log(`delDelegate chainnode unfounded {${del.id}}, ${ids}`);
+            return;
+        }
 
         const validDelegates = this.delegates
             .filter((val: Delegate) => val.id == delDelegate.id);
