@@ -1,6 +1,7 @@
 import { Injectable, Logger  } from '@nestjs/common';
 import { MailerService } from '@nest-modules/mailer';
 import { ChainNodeEntityService } from './entity.service';
+import { ChainNodeIOService } from './socketio.service';
 @Injectable()
 export class MailService {
   private isMail:Boolean = true;
@@ -8,7 +9,7 @@ export class MailService {
   private mail_duration:number = 300*1000;//5分钟
   private mail_interval:any = undefined;
   private logger: Logger = new Logger('MailService', true);
-  constructor(private readonly mailerService: MailerService, 
+  constructor(private readonly ioService: ChainNodeIOService,private readonly mailerService: MailerService, 
     private readonly entityService: ChainNodeEntityService) {
       this.logger.log("MailService constructor");
       this.startMailNotify();
@@ -57,9 +58,11 @@ export class MailService {
           if(this.isMail && toSend){//发邮件
             let dur=Math.round((curr_t - t)/(60*1000));
             let s = "\n在高度" + preHeight + ",最近有" + dur+ "分钟没出块,节点高度如下：<br /> \r\n"
+            let s2 = "在高度" + preHeight + ",最近有" + dur+ "分钟没出块"
             const nodes = await this.entityService.getAllNodes();
             s +=nodes.map(x=>x.name+":"+x.ip+" 高度："+x.lastestHeight +" "+(x.type==1?"种子节点":"")).join("<br />\r\n");
             this.sendMail(s);
+            await this.ioService.emitMailNotify(s2);
             mailCount ++;
             // console.log(s);
           }

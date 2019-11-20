@@ -12,7 +12,8 @@ import {
     EVT_NODE_REMOVED,
 
     EVT_DELEGATE_ADDED,
-    EVT_DELEGATE_REMOVED
+    EVT_DELEGATE_REMOVED,
+    EVT_MAIL_NOTIFY
 } from '../../app.constants';
 import { NodeDto } from './dto/node.dto';
 import { DelegateDto } from './dto/delegate.dto';
@@ -72,5 +73,11 @@ export class ChainNodeIOService {
         this.logger.log(`emitDelegateRemoved {${publicKey}}`);
 
         this.server.emit(EVT_DELEGATE_REMOVED, publicKey);
+    }
+
+    async emitMailNotify(notifications: string) {
+        this.logger.log(`emitMailNotify {${notifications}}`);
+
+        this.server.emit(EVT_MAIL_NOTIFY, notifications);
     }
 }
