@@ -2,8 +2,10 @@ import { Controller, Get, Query, Post, Body, Logger } from '@nestjs/common';
 import { ChainNodeService } from './chainnode.service';
 import { ChainNodeEntityService } from './entity.service';
 import { ChainNodeIOService } from './socketio.service';
+import { MailService } from './mail.service';
 
 import { CreateNodeDto, DelNodeDto } from './dto/node.dto';
+import { CreateMailDto, DelMailDto } from './dto/mail.dto';
 import { CreateDelegateDto, DelDelegateDto } from './dto/delegate.dto';
 import { buildResponseFailure, buildResponseSuccess } from "../../common";
 
@@ -13,7 +15,8 @@ export class ChainNodeController {
     constructor(
         private readonly chainnodeService: ChainNodeService,
         private readonly entityService: ChainNodeEntityService,
-        private readonly ioService: ChainNodeIOService
+        private readonly ioService: ChainNodeIOService,
+        private readonly mailService: MailService
     ) { }
 
     @Post()
@@ -142,6 +145,80 @@ export class ChainNodeController {
             const fDelegates = await this.entityService.getAllDelegates();
 
             return buildResponseSuccess(fDelegates);
+        } catch (error) {
+
+            return buildResponseFailure(error.toString());
+        }
+    }
+    @Post('mail/add')
+    async addMail(@Body() body: CreateMailDto) {
+        this.logger.log(`addMail {${JSON.stringify(body)}}`);
+        // TODO: validate node
+        try {
+            const m = await this.entityService.createMail(body);
+            return buildResponseSuccess({ id: m.id });
+        } catch (error) {
+
+            return buildResponseFailure(error.toString());
+        }
+    }
+
+    @Post('mail/del')
+    async delMail(@Body() body: DelMailDto) {
+        this.logger.log(`delMail {${JSON.stringify(body)}}`);
+        // TODO: validate address
+        try {
+            const d = await this.entityService.delMail(body);
+            return buildResponseSuccess(d);
+        } catch (error) {
+
+            return buildResponseFailure(error.toString());
+        }
+    }
+
+    @Get('mail/all')
+    async allMails() {
+        this.logger.log('allmails');
+        try {
+            const f = await this.entityService.getAllMails();
+
+            return buildResponseSuccess(f);
+        } catch (error) {
+
+            return buildResponseFailure(error.toString());
+        }
+    }
+    @Get('mail/start')
+    async startMail() {
+        this.logger.log('startMailNotify');
+        try {
+             await this.mailService.startMailNotify();
+
+            return buildResponseSuccess(true);
+        } catch (error) {
+
+            return buildResponseFailure(error.toString());
+        }
+    }
+    @Get('mail/stop')
+    async stopMail() {
+        this.logger.log('stopMail');
+        try {
+            await this.mailService.stopMailNotify();
+
+            return buildResponseSuccess(true);
+        } catch (error) {
+
+            return buildResponseFailure(error.toString());
+        }
+    }
+    @Get('mail/isrunning')
+    async isMailRun() {
+        this.logger.log('isMailRun');
+        try {
+            const res = await this.mailService.isMailRunning();
+
+            return buildResponseSuccess(res);
         } catch (error) {
 
             return buildResponseFailure(error.toString());

@@ -4,9 +4,12 @@ import { Repository } from 'typeorm';
 import uuid from 'uuid';
 
 import { ChainNode } from './models/node.entity';
+import { Mails } from './models/mail.entity';
 import { Delegate } from './models/delegate.entity';
+import { CreateMailDto, DelMailDto } from './dto/Mail.dto';
 import { CreateNodeDto, DelNodeDto } from './dto/node.dto';
 import { CreateDelegateDto, DelDelegateDto } from './dto/delegate.dto';
+
 
 @Injectable()
 export class ChainNodeEntityService {
@@ -16,7 +19,9 @@ export class ChainNodeEntityService {
         @InjectRepository(ChainNode)
         private readonly chainnodeRepo: Repository<ChainNode>,
         @InjectRepository(Delegate)
-        private readonly delegateRepo: Repository<Delegate>
+        private readonly delegateRepo: Repository<Delegate>,
+        @InjectRepository(Mails)
+        private readonly mailRepo: Repository<Mails>
     ) { }
 
     async createNode(data: CreateNodeDto): Promise<ChainNode> {
@@ -56,7 +61,12 @@ export class ChainNodeEntityService {
         const fNodes = await this.chainnodeRepo.find() || [];
         return fNodes;
     }
-
+    async getOneSeedNode(): Promise<ChainNode> {
+        const fNode = await this.chainnodeRepo.findOne({ where: { type: 1 },order: {
+            ip: "DESC"
+        }} ) ;
+        return fNode;
+    }
     async delNode(data: DelNodeDto): Promise<ChainNode> {
         const findNode = await this.chainnodeRepo.findOne({ id: data.id });
         if (findNode == null) {
@@ -144,5 +154,38 @@ export class ChainNodeEntityService {
         this.logger.log(`updateDelegate {${newData.publicKey.substring(0, 8)}, ${newData.blockHeight}}`);
 
         await this.delegateRepo.save(newData);
+    }
+
+
+    async createMail(data: CreateMailDto): Promise<Mails> {
+        const m = new Mails();
+        m.id = uuid.v1();
+        m.name = data.name;
+        m.address = data.address;
+        await this.mailRepo.save(m);
+        this.logger.log(`createmail {${m.id.substring(0, 8)}, ${m.address}}`);
+        return m;
+    }
+    async getAllMails(): Promise<Mails[]> {
+        const ms = await this.mailRepo.find() || [];
+        return ms;
+    }
+
+    async delMail(data: DelMailDto): Promise<Mails> {
+        const f = await this.mailRepo.findOne({ id: data.id });
+        if (f == null) {
+            throw new Error(`mail(${data.id}) not exists!`);
+        }
+        await this.mailRepo.delete(f);
+        this.logger.log(`delDelegate {${f.id.substring(0, 8)}, ${f.name.substring(0, 8)}}`)
+        return f;
+    }
+    async getMailByAdress(address: string): Promise<Mails> {
+        const f = await this.delegateRepo.findOne({ address });
+        if (f == null) {
+            throw new Error(`mail(${f.address}) not exists!`);
+        }
+
+        return f;
     }
 }
