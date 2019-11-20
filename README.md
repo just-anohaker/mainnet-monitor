@@ -139,6 +139,71 @@ GET - /api/chain/delegate/all
 参见'DelegateInfo'
 
 
+#### 新增邮件提醒人
+
+```
+POST - /api/chain/mail/add
+```
+
+参数 - | 字段 | 类型   | 说明       |
+      | ---- | ------ | ---------- |
+      | name   | string | 名称 |
+      | address   | string | 邮件地址 |
+
+返回  id
+
+#### 删除邮件提醒人
+
+```
+POST - /api/chain/mail/del
+```
+
+参数 - | 字段 | 类型   | 说明       |
+      | ---- | ------ | ---------- |
+      | id   | string | id          |
+
+
+返回  
+
+#### 邮件提醒列表
+
+```
+GET - /api/chain/mail/all
+```
+
+参数 - 无
+
+返回  邮件提醒人列表
+
+#### 打开邮件提醒功能（默认开启）
+
+```
+GET - /api/chain/mail/start
+```
+
+参数 - 
+
+返回   
+
+#### 关闭邮件提醒功能
+
+```
+GET - /api/chain/mail/stop
+```
+
+参数 - 
+
+返回   
+#### 邮件提醒功能状态
+
+```
+GET - /api/chain/mail/isrunning
+```
+
+参数 - 
+
+返回   true/false
+
 
 ## SocketIO API
 

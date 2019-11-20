@@ -26,11 +26,7 @@ export class MailService {
         //节点的高度有 x 没有发生变化
         //发邮件
         const f = await this.entityService.getOneSeedNode();
-        this.logger.log("get height from",JSON.stringify(f.ip));
-        // let s = "\n在高度" + preHeight + ",最近有" + this.duration+ "分钟没出块 \n"
-        // const nodes = await this.entityService.getAllNodes();
-        // s +=nodes.map(x=>x.name+":"+x.ip+x.lastestHeight +" "+x.type).join("\n");
-        // this.sendMail(s);
+        if (f) this.logger.log("get height from "+JSON.stringify(f.ip));
         if(f && preHeight == f.lastestHeight){//高度相等，时间不更新，比较时间看是否需要发邮件
           let curr_t = Date.now();
           let toSend = false;
