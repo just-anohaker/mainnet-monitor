@@ -6,7 +6,7 @@ import uuid from 'uuid';
 import { ChainNode } from './models/node.entity';
 import { Mails } from './models/mail.entity';
 import { Delegate } from './models/delegate.entity';
-import { CreateMailDto, DelMailDto } from './dto/Mail.dto';
+import { CreateMailDto, DelMailDto } from './dto/mail.dto';
 import { CreateNodeDto, DelNodeDto } from './dto/node.dto';
 import { CreateDelegateDto, DelDelegateDto } from './dto/delegate.dto';
 
@@ -62,9 +62,11 @@ export class ChainNodeEntityService {
         return fNodes;
     }
     async getOneSeedNode(): Promise<ChainNode> {
-        const fNode = await this.chainnodeRepo.findOne({ where: { type: 1 },order: {
-            ip: "DESC"
-        }} ) ;
+        const fNode = await this.chainnodeRepo.findOne({
+            where: { type: 1 }, order: {
+                ip: "DESC"
+            }
+        });
         return fNode;
     }
     async delNode(data: DelNodeDto): Promise<ChainNode> {
