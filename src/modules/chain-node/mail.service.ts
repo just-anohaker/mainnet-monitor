@@ -5,6 +5,7 @@ import { ChainNodeEntityService } from './entity.service';
 export class MailService {
   private isMail:Boolean = true;
   private duration = 20;//每6秒检查一次节点高度
+  private mail_duration:number = 300*1000;//5分钟
   private mail_interval:any = undefined;
   private logger: Logger = new Logger('MailService', true);
   constructor(private readonly mailerService: MailerService, 
@@ -32,22 +33,22 @@ export class MailService {
           let toSend = false;
           switch (mailCount) {//发邮件的次数在5次以下
             case 0:
-              if (curr_t - t > 30*1000){
+              if (curr_t - t > this.mail_duration){//5分钟
                 toSend = true;
               }
               break;
             case 1:
-              if (curr_t - t > 6*30*1000){//30分钟
+              if (curr_t - t > 6*this.mail_duration){//30分钟
                 toSend = true;
               }
               break;
             case 2:
-              if (curr_t - t > 24*30*1000){//2小时 
+              if (curr_t - t > 24*this.mail_duration){//2小时 
                 toSend = true;
               }
             break;
             case 3:
-              if (curr_t - t > 72*30*1000){//4小时
+              if (curr_t - t > 72*this.mail_duration){//4小时
                 toSend = true;
               }
             break;
