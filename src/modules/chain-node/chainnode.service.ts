@@ -41,6 +41,7 @@ export class ChainNodeService {
     private static DELEGATE_SCHEDULER: number = 200;
     private static MONITOR_INTERVAL: number = 15 * 1000;
     private static MONITABLE: boolean = false;
+    private static MAX_DELEGATE_COUNT: number = 10000;
 
     private logger: Logger = new Logger('ChainNodeService', true);
     private chainnodes: ChainNode[];
@@ -177,6 +178,7 @@ export class ChainNodeService {
                 const now = Date.now();
                 const index = this.heightPc;
                 this.heightPc++;
+                this.heightPc = this.heightPc > this.chainnodes.length * 2 ? 0 : this.heightPc;
                 const node = this.chainnodes[index % this.chainnodes.length];
                 const cache = this.cache.get(node.id);
                 if (!cache.heightRequesting
@@ -217,6 +219,7 @@ export class ChainNodeService {
                 const now = Date.now();
                 const index = this.statusPc;
                 this.statusPc++;
+                this.statusPc = this.statusPc > this.chainnodes.length * 2 ? 0 : this.statusPc;
                 const node = this.chainnodes[index % this.chainnodes.length];
                 const cache = this.cache.get(node.id);
                 if (!cache.statusRequesting
@@ -248,6 +251,7 @@ export class ChainNodeService {
                 const now = Date.now();
                 const index = this.updatePc;
                 this.updatePc++;
+                this.updatePc = this.updatePc > this.chainnodes.length * 2 ? 0 : this.updatePc;
                 const node = this.chainnodes[index % this.chainnodes.length];
                 const cache = this.cache.get(node.id);
                 if (
@@ -317,6 +321,7 @@ export class ChainNodeService {
             if (uninitDelegates.length > 0) {
                 const index = this.delegatePc;
                 this.delegatePc++;
+                this.delegatePc = this.delegatePc > ChainNodeService.MAX_DELEGATE_COUNT ? 0 : this.delegatePc;
                 const uninitDelegate = uninitDelegates[index % uninitDelegates.length];
                 const withServer = this.chainnodes.find(
                     (val: ChainNode) => val.id === uninitDelegate.id
