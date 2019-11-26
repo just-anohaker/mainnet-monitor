@@ -14,7 +14,8 @@ import { delay } from '../../common';
 
 @Injectable()
 export class BlockChainService {
-    private static MAX_TIMEOUT: number = 30 * 1000;
+    private static MAX_TIMEOUT: number = 60 * 1000;
+    private static DEFAULT_TIMEOUT: number = 30 * 1000;
 
     async getHeight(server: BlockChainServer): Promise<Maybe<number>> {
         const url = this.buildBaseURL(server) + '/api/blocks/getHeight';
@@ -117,7 +118,9 @@ export class BlockChainService {
     }
 
     private async asyncGet(
-        url: string, params: JsonObject = {}, timeout: number = 4000
+        url: string,
+        params: JsonObject = {},
+        timeout: number = BlockChainService.DEFAULT_TIMEOUT
     ): Promise<Maybe<JsonObject>> {
         try {
             const resp = await axios.get(url, { params, timeout });
