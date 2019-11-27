@@ -190,13 +190,25 @@ export class ChainNodeService {
                         if (cache.height > maybeHeight!) {
                             this.logger.log(`Maybe blockchain start backup or recovery! {${cache.height},${maybeHeight!}}`);
                             node.lastestHeight = maybeHeight! - 1;
+                            this.hasNode(node)
+                                && await this.updateNodeLastestHeight(node);
+                            this.hasNode(node)
+                                && await this.ioService.emitHeightUpdate(this.toNodeDTO(node, []));
                             for (let val of this.delegates) {
                                 if (val.id === node.id) {
                                     val.blockHeight = -1;
+                                    this.hasDelegate(val)
+                                        && await this.entityService.updateDelegate(val);
+                                    this.hasDelegate(val)
+                                        && await this.ioService.emitDelegateUpdate(this.toDelegateDTO(val));
                                 }
                             }
                         } else {
                             node.lastestHeight = node.lastestHeight === -1 ? maybeHeight - 1 : node.lastestHeight;
+                            this.hasNode(node)
+                                && await this.updateNodeLastestHeight(node);
+                            this.hasNode(node)
+                                && await this.ioService.emitHeightUpdate(this.toNodeDTO(node, []));
                         }
                         cache.height = maybeHeight!;
                         this.logger.log(`onHeightScheduler {${node.id.substring(0, 8)}, ${maybeHeight!}}`);
@@ -290,7 +302,7 @@ export class ChainNodeService {
                         }
 
                         if (maybeBlocks.length > 0) {
-                            await this.ioService.emitHeightUpdate(this.toNodeDTO(node, []));
+                            // await this.ioService.emitHeightUpdate(this.toNodeDTO(node, []));
                             lastUpdateNode
                                 && await this.ioService.emitNodeUpdate(this.toNodeDTO(lastUpdateNode, []));
                             lastUpdateDelegate
@@ -332,10 +344,12 @@ export class ChainNodeService {
                 );
                 if (maybeBlock != null) {
                     this.hasNode(withServer)
-                        && await this.updateNode(withServer, maybeBlock)
+                        && await this.updateNode(withServer, maybeBlock);
+                    this.hasNode(withServer)
                         && await this.ioService.emitNodeUpdate(this.toNodeDTO(withServer, []));
                     this.hasDelegate(uninitDelegate)
-                        && await this.updateDelegate(uninitDelegate, maybeBlock)
+                        && await this.updateDelegate(uninitDelegate, maybeBlock);
+                    this.hasDelegate(uninitDelegate)
                         && await this.ioService.emitDelegateUpdate(this.toDelegateDTO(uninitDelegate));
                     this.logger.log(`onDelegateScheduler {${maybeBlock.height}, ${maybeBlock.generatorId}}`);
                 }
@@ -381,6 +395,11 @@ export class ChainNodeService {
             this.onDelegateScheduler,
             ChainNodeService.DELEGATE_SCHEDULER
         );
+    }
+
+    private async updateNodeLastestHeight(withServer: ChainNode) {
+        this.hasNode(withServer) && await this.entityService.updateNode(withServer);
+        return true;
     }
 
     private async updateNode(withServer: ChainNode, block: BlockChainBlock, force: boolean = false) {
